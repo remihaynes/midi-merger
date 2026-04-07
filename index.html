@@ -11,15 +11,17 @@
     font-family: "Consolas", monospace;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    align-items: center;   /* center horizontally */
+    justify-content: flex-start; /* push content to top */
     height: 100vh;
     margin: 0;
+    padding-top: 80px; /* pushes content slightly down from top */
+    overflow: hidden;
   }
 
   h3 {
     color: #ffffff;
-    margin-bottom: 40px;
+    margin-bottom: 30px;
   }
 
   .center-column {
@@ -36,54 +38,54 @@
     border: 1px solid #444;
     padding: 10px 20px;
     border-radius: 6px;
+    font-size: 15px;
+  }
+
+  button {
+    cursor: pointer;
+    transition: 0.2s;
   }
 
   button:hover {
     background: #2a2a2a;
   }
 
-  /* --- Retro footer --- */
-  .footer {
+  /* --- Piano GIF --- */
+  .piano {
+    margin-top: 40px;
+    opacity: 0.9;
+  }
+
+  .piano img {
+    width: 120px;
+  }
+
+  /* --- Vine decorations --- */
+  .vine-left, .vine-right {
     position: absolute;
-    bottom: 10px;
-    text-align: center;
-    font-size: 12px;
-    opacity: 0.8;
+    top: 0;
+    width: 150px;
+    opacity: 0.4;
+    pointer-events: none;
   }
 
-  .blink {
-    animation: blink 1s step-start infinite;
+  .vine-left {
+    left: 0;
   }
 
-  @keyframes blink {
-    50% { opacity: 0; }
-  }
-
-  .marquee {
-    width: 100%;
-    overflow: hidden;
-    white-space: nowrap;
-    position: absolute;
-    bottom: 0;
-    font-size: 12px;
-    color: #00ffcc;
-  }
-
-  .marquee span {
-    display: inline-block;
-    padding-left: 100%;
-    animation: scroll 10s linear infinite;
-  }
-
-  @keyframes scroll {
-    0% { transform: translateX(0); }
-    100% { transform: translateX(-100%); }
+  .vine-right {
+    right: 0;
+    transform: scaleX(-1);
   }
 
 </style>
 </head>
 
 <body>
+
+<!-- Vines -->
+<img class="vine-left" src="https://upload.wikimedia.org/wikipedia/commons/3/3f/Vine_PNG.png">
+<img class="vine-right" src="https://upload.wikimedia.org/wikipedia/commons/3/3f/Vine_PNG.png">
 
 <h3>MIDI Merger</h3>
 
@@ -92,13 +94,9 @@
   <button onclick="mergeMidi()">Merge & Download</button>
 </div>
 
-<!-- Retro footer -->
-<div class="footer">
-  <div class="blink">★ MIDI SYSTEM ONLINE ★</div>
-</div>
-
-<div class="marquee">
-  <span>~~ MIDI MERGER v1.0 ~~ TYPE 1 EXPORT ENABLED ~~ NO ABLETON LIMITATIONS ~~</span>
+<!-- Piano GIF -->
+<div class="piano">
+  <img src="https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif" alt="piano gif">
 </div>
 
 <script type="module">
@@ -186,7 +184,6 @@ window.mergeMidi = async function () {
 
         newTrack = rebuild(newTrack);
 
-        // store track length
         const totalTime = newTrack.reduce((sum, e) => sum + e.deltaTime, 0);
         newTrack.totalTime = totalTime;
 
@@ -195,7 +192,6 @@ window.mergeMidi = async function () {
       });
     });
 
-    // --- FIX: extend tracks to longest ---
     let maxTime = 0;
     outputTracks.forEach(t => {
       if (t.totalTime > maxTime) maxTime = t.totalTime;
