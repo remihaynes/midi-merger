@@ -100,6 +100,7 @@
   <img src="piano.gif" alt="pixel piano">
 </div>
 
+<!-- Vine animation script with fade -->
 <script>
 (function () {
   const PX = 6;
@@ -108,7 +109,6 @@
   const SHADOW = '#1a4a0e';
   const HANGS  = ['#4fd63a','#3cba28','#28a01a','#5ee048'];
 
-  // ellipse around the UI buttons — vines stay out
   const SAFE = { cx: 0.5, cy: 0.30, rw: 0.20, rh: 0.20 };
 
   const canvas = document.getElementById('vineCanvas');
@@ -137,35 +137,36 @@
     return dx*dx + dy*dy < 1;
   }
 
-  function dp(tx, ty, color) {
+  function dp(tx, ty, color, alpha=1) {
     if (tx < 0 || ty < 0 || tx >= WT || ty >= HT) return false;
     if (inSafe(tx, ty)) return false;
     ctx.fillStyle = color;
+    if (alpha < 1) ctx.globalAlpha = alpha;
     ctx.fillRect(tx*PX, ty*PX, PX, PX);
+    if (alpha < 1) ctx.globalAlpha = 1;
     return true;
   }
 
-  function drawLeaf(tx, ty, dir, ci) {
+  function drawLeaf(tx, ty, dir, ci, alpha=1) {
     const b = LEAVES[ci % LEAVES.length];
     if (dir === 'r') {
-      dp(tx,   ty,   b); dp(tx+1, ty,   b);
-      dp(tx+1, ty+1, b); dp(tx,   ty+1, SHADOW); dp(tx+2, ty, SHADOW);
+      dp(tx,   ty,   b, alpha); dp(tx+1, ty,   b, alpha);
+      dp(tx+1, ty+1, b, alpha); dp(tx,   ty+1, SHADOW, alpha); dp(tx+2, ty, SHADOW, alpha);
     } else {
-      dp(tx,   ty,   b); dp(tx-1, ty,   b);
-      dp(tx-1, ty+1, b); dp(tx,   ty+1, SHADOW); dp(tx-2, ty, SHADOW);
+      dp(tx,   ty,   b, alpha); dp(tx-1, ty,   b, alpha);
+      dp(tx-1, ty+1, b, alpha); dp(tx,   ty+1, SHADOW, alpha); dp(tx-2, ty, SHADOW, alpha);
     }
   }
 
-  function drawHang(tx, ty, len, ci) {
+  function drawHang(tx, ty, len, ci, alpha=1) {
     for (let i = 0; i < len; i++) {
       const c = HANGS[(ci+i) % HANGS.length];
       const j = i % 2 === 0 ? 0 : (Math.random() > .5 ? 1 : 0);
-      dp(tx+j, ty+i, c);
-      if (i === len-1) dp(tx+j, ty+i+1, SHADOW);
+      dp(tx+j, ty+i, c, alpha);
+      if (i === len-1) dp(tx+j, ty+i+1, SHADOW, alpha);
     }
   }
 
-  // ---------- Seg: a growing vine arm ----------
   class Seg {
     constructor(x, y, dx, dy, ci, delay) {
       this.x = x; this.y = y;
@@ -173,51 +174,50 @@
       this.ci = ci;
       this.leafTimer = 0; this.leafSide = Math.random() > .5 ? 'r' : 'l';
       this.hangTimer = 0;
-      this.alive = true;
       this.age = -(delay || 0);
+      this.lifespan = 120 + Math.floor(Math.random() * 80);
+      this.alive = true;
     }
 
     tick() {
       if (!this.alive) return;
       if (this.age < 0) { this.age++; return; }
 
+      const fadeAlpha = 1 - Math.max(0, (this.age - this.lifespan*0.8) / (this.lifespan*0.2));
       const tx = Math.round(this.x), ty = Math.round(this.y);
-      if (!dp(tx, ty, STEMS[this.ci % STEMS.length])) { this.alive = false; return; }
 
-      // leaf every few steps
+      if (!dp(tx, ty, STEMS[this.ci % STEMS.length], fadeAlpha)) {
+        this.alive = false; return;
+      }
+
       this.leafTimer++;
       if (this.leafTimer >= 3 + Math.floor(Math.random()*3)) {
         this.leafTimer = 0;
-        drawLeaf(tx, ty, this.leafSide, this.ci);
+        drawLeaf(tx, ty, this.leafSide, this.ci, fadeAlpha);
         this.leafSide = this.leafSide === 'r' ? 'l' : 'r';
         this.ci = (this.ci+1) % LEAVES.length;
       }
 
-      // hanging drips
       this.hangTimer++;
       if (this.hangTimer >= 5 + Math.floor(Math.random()*6)) {
         this.hangTimer = 0;
         const hx = tx + (this.dy !== 0 ? (Math.random()>.5?1:-1) : 0);
         const hy = ty + (this.dx !== 0 ? (Math.random()>.5?1:-1) : 0);
-        drawHang(hx, hy, 2+Math.floor(Math.random()*5), this.ci);
+        drawHang(hx, hy, 2+Math.floor(Math.random()*5), this.ci, fadeAlpha);
       }
 
-      // gentle wander
-      if (Math.random() < 0.20) {
-        if (Math.abs(this.dy) > Math.abs(this.dx)) {
-          this.dx += (Math.random()>.5 ? 0.15 : -0.15);
-          this.dx = Math.max(-0.7, Math.min(0.7, this.dx));
-        } else {
-          this.dy += (Math.random()>.5 ? 0.1 : -0.1);
-        }
+      if (Math.random() < 0.15) {
+        this.dx += (Math.random()>.5 ? 0.08 : -0.08);
+        this.dx = Math.max(-0.5, Math.min(0.5, this.dx));
+        this.dy += (Math.random()>.5 ? 0.05 : -0.05);
+        this.dy = Math.max(-0.5, Math.min(0.5, this.dy));
       }
 
-      this.x += this.dx * (0.6 + Math.random()*0.6);
-      this.y += this.dy * (0.6 + Math.random()*0.6);
+      this.x += this.dx * (0.5 + Math.random()*0.5);
+      this.y += this.dy * (0.5 + Math.random()*0.5);
       this.age++;
 
-      // occasional branch
-      if (this.age > 10 && Math.random() < 0.025) {
+      if (this.age > 10 && Math.random() < 0.02) {
         const bdy = this.dy !== 0 ? this.dx * 0.5 : this.dy * 0.5 + (this.dy>0?0.5:0);
         const bdx = this.dx !== 0 ? this.dy * 0.5 : this.dx;
         segs.push(new Seg(tx, ty, bdx * 0.7, bdy + 0.3, this.ci, 0));
@@ -227,13 +227,8 @@
 
   let segs = [];
 
-  // ---------- Mouse tendril ----------
   class MouseTendril {
-    constructor(sx, sy) {
-      this.x = sx; this.y = sy;
-      this.ci = Math.floor(Math.random()*STEMS.length);
-      this.alive = true; this.stuck = 0;
-    }
+    constructor(sx, sy) { this.x = sx; this.y = sy; this.ci = Math.floor(Math.random()*STEMS.length); this.alive = true; this.stuck = 0; }
     tick() {
       if (!this.alive) return;
       const tx = Math.round(this.x), ty = Math.round(this.y);
@@ -241,20 +236,17 @@
       const dist = Math.sqrt(mdx*mdx + mdy*mdy);
       if (dist < 2) { this.stuck++; if (this.stuck > 15) this.alive=false; return; }
       this.stuck = 0;
-
       let nx = tx + Math.sign(mdx) * (Math.random()<0.75?1:0) + (Math.random()<0.15?(Math.random()>.5?1:-1):0);
       let ny = ty + Math.sign(mdy) * (Math.random()<0.75?1:0) + (Math.random()<0.15?(Math.random()>.5?1:-1):0);
-
       if (!dp(nx, ny, STEMS[this.ci % STEMS.length])) { this.alive=false; return; }
       if (Math.random() < 0.25) drawLeaf(nx, ny, Math.random()>.5?'r':'l', this.ci);
-      this.x = nx; this.y = ny;
-      this.ci = (this.ci+1) % STEMS.length;
+      this.x = nx; this.y = ny; this.ci = (this.ci+1) % STEMS.length;
     }
   }
 
   let mouseTendril = null;
 
-  function spawnTendril() {
+  function spawnTendril() { 
     if (mouseTendril && mouseTendril.alive) return;
     if (mouse.tx < 0 || inSafe(mouse.tx, mouse.ty)) return;
     const dL=mouse.tx, dR=WT-mouse.tx, dT=mouse.ty, dB=HT-mouse.ty;
@@ -268,62 +260,34 @@
   }
 
   function initAll() {
-    segs = [];
-    mouseTendril = null;
-    ctx.clearRect(0,0,W,H);
-
-    // edge spawn points: [x, y, dx, dy, delay]
+    segs = []; mouseTendril = null; ctx.clearRect(0,0,W,H);
     const roots = [
-      // left wall, top-to-bottom
-      [0, 0,       0.15, 1,    0],
-      [0, HT*0.28, 0.2,  1,   15],
-      [0, HT*0.55, 0.1,  1,   30],
-      [0, HT*0.75, 0.25,-0.5, 20],
-      // right wall
-      [WT-1, 0,        -0.15, 1,    5],
-      [WT-1, HT*0.35,  -0.2,  1,   20],
-      [WT-1, HT*0.6,   -0.1,  1,   35],
-      [WT-1, HT*0.8,   -0.25,-0.5, 25],
-      // top edge crawlers
-      [WT*0.12, 0,  0.5,  0.8,  8],
-      [WT*0.38, 0, -0.1,  1,   12],
-      [WT*0.62, 0,  0.1,  1,   12],
-      [WT*0.88, 0, -0.5,  0.8,  8],
-      // bottom corner crawlers going up and inward
-      [0,    HT-1,  0.4, -0.7, 10],
-      [WT-1, HT-1, -0.4, -0.7, 10],
-      [WT*0.18, HT-1,  0.2, -1, 18],
-      [WT*0.82, HT-1, -0.2, -1, 18],
+      [0, 0, 0.15, 1, 0], [0, HT*0.28, 0.2, 1, 15], [0, HT*0.55, 0.1, 1, 30], [0, HT*0.75, 0.25,-0.5, 20],
+      [WT-1, 0, -0.15, 1, 5], [WT-1, HT*0.35, -0.2, 1, 20], [WT-1, HT*0.6, -0.1, 1, 35], [WT-1, HT*0.8, -0.25,-0.5, 25],
+      [WT*0.12,0,0.5,0.8,8], [WT*0.38,0,-0.1,1,12], [WT*0.62,0,0.1,1,12], [WT*0.88,0,-0.5,0.8,8],
+      [0, HT-1,0.4,-0.7,10],[WT-1,HT-1,-0.4,-0.7,10],[WT*0.18,HT-1,0.2,-1,18],[WT*0.82,HT-1,-0.2,-1,18],
     ];
-
-    roots.forEach(([x,y,dx,dy,delay], i) => {
-      segs.push(new Seg(x, y, dx, dy, i % STEMS.length, delay));
-    });
+    roots.forEach(([x,y,dx,dy,delay], i)=>{ segs.push(new Seg(x,y,dx,dy,i%STEMS.length,delay)); });
   }
 
   initAll();
-
-  let last = 0, tendrTick = 0;
-  const TICK = 115;
-
+  let last = 0, tendrTick = 0; const TICK = 115;
   function loop(ts) {
     if (ts - last >= TICK) {
       last = ts;
-      segs.forEach(s => s.tick());
-      segs = segs.filter(s => s.alive);
-      if (segs.length < 5) initAll();
-
-      tendrTick++;
-      if (tendrTick > 25) { tendrTick = 0; spawnTendril(); }
-      if (mouseTendril) mouseTendril.tick();
+      segs.forEach(s=>s.tick());
+      segs = segs.filter(s=>s.alive || s.age < s.lifespan+20);
+      if(segs.length < 5) initAll();
+      tendrTick++; if(tendrTick>25){tendrTick=0; spawnTendril();}
+      if(mouseTendril) mouseTendril.tick();
     }
     requestAnimationFrame(loop);
   }
-
   requestAnimationFrame(loop);
 })();
 </script>
 
+<!-- MIDI merge script (keep unchanged) -->
 <script type="module">
 import { parseMidi, writeMidi } from "https://cdn.jsdelivr.net/npm/midi-file@1.2.4/+esm";
 
