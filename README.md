@@ -1,4 +1,6 @@
 # midi-merger
+
+
 A simple browser-based tool to merge multiple MIDI files into a single type 1 MIDI file with all tracks, tempo changes, and automation
 preserved. 
 
