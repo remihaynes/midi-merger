@@ -1,573 +1,125 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MIDI Merger</title>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg: #0e0e0f;
-      --surface: #1a1a1c;
-      --surface2: #242426;
-      --border: #2e2e32;
-      --accent: #00e5a0;
-      --accent-dim: rgba(0,229,160,0.12);
-      --text: #f0f0f0;
-      --muted: #888;
-      --danger: #ff5c5c;
-    }
-
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'DM Sans', sans-serif;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 3rem 1.5rem 4rem;
-    }
-
-    header {
-      text-align: center;
-      margin-bottom: 3rem;
-    }
-
-    .logo {
-      font-family: 'Space Mono', monospace;
-      font-size: 2rem;
-      font-weight: 700;
-      letter-spacing: -1px;
-      color: var(--text);
-    }
-
-    .logo span {
-      color: var(--accent);
-    }
-
-    .tagline {
-      margin-top: 0.5rem;
-      font-size: 0.95rem;
-      color: var(--muted);
-      font-weight: 300;
-    }
-
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 2rem;
-      width: 100%;
-      max-width: 620px;
-    }
-
-    .section-label {
-      font-family: 'Space Mono', monospace;
-      font-size: 0.7rem;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--accent);
-      margin-bottom: 0.75rem;
-    }
-
-    /* Drop zone */
-    .drop-zone {
-      border: 1.5px dashed var(--border);
-      border-radius: 12px;
-      padding: 2.5rem 1.5rem;
-      text-align: center;
-      cursor: pointer;
-      transition: border-color 0.2s, background 0.2s;
-      background: var(--surface2);
-      position: relative;
-    }
-
-    .drop-zone:hover, .drop-zone.over {
-      border-color: var(--accent);
-      background: var(--accent-dim);
-    }
-
-    .drop-icon {
-      font-size: 2.2rem;
-      margin-bottom: 0.75rem;
-      display: block;
-    }
-
-    .drop-zone p {
-      font-size: 0.9rem;
-      color: var(--muted);
-      line-height: 1.6;
-    }
-
-    .drop-zone .browse {
-      color: var(--accent);
-      cursor: pointer;
-      text-decoration: underline;
-      text-underline-offset: 3px;
-    }
-
-    #fileInput { display: none; }
-
-    /* File list */
-    #fileList {
-      margin-top: 1.25rem;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .file-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 10px 14px;
-      font-size: 0.85rem;
-      cursor: grab;
-      transition: border-color 0.15s;
-      user-select: none;
-    }
-
-    .file-row.dragging { opacity: 0.4; }
-    .file-row.drag-over { border-color: var(--accent); }
-
-    .drag-handle {
-      color: var(--muted);
-      font-size: 1rem;
-      cursor: grab;
-      flex-shrink: 0;
-    }
-
-    .file-name {
-      flex: 1;
-      font-family: 'Space Mono', monospace;
-      font-size: 0.78rem;
-      color: var(--text);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .file-size {
-      color: var(--muted);
-      font-size: 0.75rem;
-      white-space: nowrap;
-    }
-
-    .remove-btn {
-      background: none;
-      border: none;
-      color: var(--muted);
-      cursor: pointer;
-      font-size: 1.1rem;
-      line-height: 1;
-      padding: 0 2px;
-      flex-shrink: 0;
-      transition: color 0.15s;
-    }
-
-    .remove-btn:hover { color: var(--danger); }
-
-    /* Divider */
-    .divider {
-      border: none;
-      border-top: 1px solid var(--border);
-      margin: 1.75rem 0;
-    }
-
-    /* Output filename */
-    .input-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .input-row label {
-      font-size: 0.85rem;
-      color: var(--muted);
-      white-space: nowrap;
-    }
-
-    .input-row input {
-      flex: 1;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text);
-      font-family: 'Space Mono', monospace;
-      font-size: 0.82rem;
-      padding: 8px 12px;
-      outline: none;
-      transition: border-color 0.15s;
-    }
-
-    .input-row input:focus { border-color: var(--accent); }
-
-    /* Buttons */
-    .actions {
-      display: flex;
-      gap: 10px;
-      margin-top: 1.25rem;
-      flex-wrap: wrap;
-    }
-
-    .btn {
-      font-family: 'DM Sans', sans-serif;
-      font-size: 0.88rem;
-      font-weight: 500;
-      border-radius: 8px;
-      padding: 10px 20px;
-      cursor: pointer;
-      border: 1px solid var(--border);
-      transition: all 0.15s;
-    }
-
-    .btn-ghost {
-      background: transparent;
-      color: var(--muted);
-    }
-
-    .btn-ghost:hover:not(:disabled) {
-      background: var(--surface2);
-      color: var(--text);
-    }
-
-    .btn-primary {
-      background: var(--accent);
-      color: #000;
-      border-color: var(--accent);
-      font-weight: 700;
-      flex: 1;
-    }
-
-    .btn-primary:hover:not(:disabled) {
-      filter: brightness(1.1);
-    }
-
-    .btn:disabled {
-      opacity: 0.3;
-      cursor: not-allowed;
-    }
-
-    /* Status */
-    .status {
-      margin-top: 1rem;
-      font-size: 0.85rem;
-      min-height: 20px;
-      color: var(--muted);
-      font-family: 'Space Mono', monospace;
-    }
-
-    .status.ok { color: var(--accent); }
-    .status.err { color: var(--danger); }
-
-    /* Instructions */
-    .instructions {
-      width: 100%;
-      max-width: 620px;
-      margin-top: 2rem;
-    }
-
-    .instructions h3 {
-      font-family: 'Space Mono', monospace;
-      font-size: 0.7rem;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--accent);
-      margin-bottom: 1rem;
-    }
-
-    .steps {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .step {
-      display: flex;
-      gap: 14px;
-      align-items: flex-start;
-    }
-
-    .step-num {
-      font-family: 'Space Mono', monospace;
-      font-size: 0.72rem;
-      color: var(--accent);
-      background: var(--accent-dim);
-      border-radius: 50%;
-      width: 24px;
-      height: 24px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      margin-top: 1px;
-    }
-
-    .step p {
-      font-size: 0.88rem;
-      color: var(--muted);
-      line-height: 1.6;
-    }
-
-    .step p strong { color: var(--text); font-weight: 500; }
-
-    footer {
-      margin-top: 3rem;
-      font-size: 0.75rem;
-      color: #444;
-      font-family: 'Space Mono', monospace;
-      text-align: center;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>MIDI Merger (Full Fidelity)</title>
 </head>
 <body>
 
-<header>
-  <div class="logo">MIDI<span>merger</span></div>
-  <p class="tagline">Combine multiple Ableton MIDI exports into one Type 1 multitrack file</p>
-</header>
+<h3>MIDI Merger (Type 1, Full Data)</h3>
+<input type="file" id="files" multiple accept=".mid,.midi">
+<button onclick="mergeMidi()">Merge & Download</button>
 
-<div class="card">
-  <div class="section-label">01 — Load your files</div>
-
-  <div class="drop-zone" id="dropZone">
-    <span class="drop-icon">🎹</span>
-    <p>Drag & drop your <strong>.mid</strong> files here<br>
-    or <span class="browse" id="browseBtn">click to browse</span></p>
-    <input type="file" id="fileInput" accept=".mid,.midi" multiple>
-  </div>
-
-  <div id="fileList"></div>
-
-  <hr class="divider">
-
-  <div class="section-label">02 — Name your output</div>
-
-  <div class="input-row">
-    <label for="outName">Filename:</label>
-    <input type="text" id="outName" value="merged_output.mid">
-  </div>
-
-  <div class="actions">
-    <button class="btn btn-ghost" id="clearBtn" disabled>Clear all</button>
-    <button class="btn btn-primary" id="mergeBtn" disabled>Merge & Download</button>
-  </div>
-
-  <div class="status" id="status"></div>
-</div>
-
-<div class="instructions">
-  <h3>How to use</h3>
-  <div class="steps">
-    <div class="step">
-      <div class="step-num">1</div>
-      <p>In Ableton, <strong>right-click each MIDI track</strong> and export/save as a .mid file. Do this for every track in your project.</p>
-    </div>
-    <div class="step">
-      <div class="step-num">2</div>
-      <p><strong>Drop all your .mid files</strong> into the box above. Drag to reorder them — the order here becomes the track order in the final file.</p>
-    </div>
-    <div class="step">
-      <div class="step-num">3</div>
-      <p><strong>Click Merge & Download.</strong> You'll get a single Type 1 .mid file you can drag straight into any DAW.</p>
-    </div>
-  </div>
-</div>
-
-<footer>no files are uploaded anywhere &mdash; everything runs in your browser</footer>
+<script src="https://cdn.jsdelivr.net/npm/midi-file@1.2.4/dist/midi-file.min.js"></script>
 
 <script>
-  const dropZone = document.getElementById('dropZone');
-  const fileInput = document.getElementById('fileInput');
-  const fileList = document.getElementById('fileList');
-  const mergeBtn = document.getElementById('mergeBtn');
-  const clearBtn = document.getElementById('clearBtn');
-  const statusEl = document.getElementById('status');
+async function mergeMidi() {
+  const input = document.getElementById("files");
+  const files = input.files;
 
-  let files = [];
-  let dragSrcIdx = null;
+  if (!files.length) {
+    alert("Select MIDI files.");
+    return;
+  }
 
-  document.getElementById('browseBtn').onclick = (e) => { e.stopPropagation(); fileInput.click(); };
-  dropZone.onclick = () => fileInput.click();
-  fileInput.onchange = (e) => addFiles(Array.from(e.target.files));
+  const parsedFiles = [];
 
-  dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('over'); });
-  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
-  dropZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropZone.classList.remove('over');
-    const dropped = Array.from(e.dataTransfer.files).filter(f => f.name.match(/\.midi?$/i));
-    if (dropped.length === 0) {
-      setStatus('No .mid files found in that drop.', 'err');
-      return;
-    }
-    addFiles(dropped);
+  // Read all MIDI files
+  for (let file of files) {
+    const buffer = await file.arrayBuffer();
+    const midi = MidiFile.parseMidi(new Uint8Array(buffer));
+    parsedFiles.push(midi);
+  }
+
+  // Use first file header as base
+  const header = {
+    format: 1,
+    numTracks: 0,
+    ticksPerBeat: parsedFiles[0].header.ticksPerBeat
+  };
+
+  const outputTracks = [];
+
+  // --- GLOBAL TRACK (tempo, time signature, etc.) ---
+  const globalTrack = [];
+
+  parsedFiles.forEach((midi, index) => {
+    midi.tracks.forEach((track, tIndex) => {
+
+      const newTrack = [];
+      let absoluteTime = 0;
+
+      track.forEach(event => {
+        absoluteTime += event.deltaTime;
+
+        // Clone event
+        const newEvent = JSON.parse(JSON.stringify(event));
+
+        // Normalize deltaTime later
+        newEvent.absoluteTime = absoluteTime;
+
+        // Put global/meta events ONLY in first track
+        if (event.meta) {
+          if (event.type === "setTempo" ||
+              event.type === "timeSignature" ||
+              event.type === "keySignature") {
+            
+            if (index === 0 && tIndex === 0) {
+              globalTrack.push(newEvent);
+            }
+            return;
+          }
+        }
+
+        newTrack.push(newEvent);
+      });
+
+      // Sort + convert back to deltaTime
+      newTrack.sort((a, b) => a.absoluteTime - b.absoluteTime);
+
+      let lastTime = 0;
+      newTrack.forEach(e => {
+        e.deltaTime = e.absoluteTime - lastTime;
+        delete e.absoluteTime;
+        lastTime += e.deltaTime;
+      });
+
+      outputTracks.push(newTrack);
+    });
   });
 
-  function addFiles(newFiles) {
-    newFiles.forEach(f => {
-      if (!files.find(x => x.name === f.name)) files.push(f);
-    });
-    renderList();
-    setStatus(files.length + ' file' + (files.length !== 1 ? 's' : '') + ' loaded', '');
-  }
+  // Process global track timing
+  globalTrack.sort((a, b) => a.absoluteTime - b.absoluteTime);
 
-  function renderList() {
-    fileList.innerHTML = '';
-    files.forEach((f, i) => {
-      const row = document.createElement('div');
-      row.className = 'file-row';
-      row.draggable = true;
-      row.dataset.idx = i;
-      row.innerHTML =
-        '<span class="drag-handle">⠿</span>' +
-        '<span class="file-name">' + escHtml(f.name) + '</span>' +
-        '<span class="file-size">' + (f.size / 1024).toFixed(1) + ' KB</span>' +
-        '<button class="remove-btn" data-idx="' + i + '" title="Remove">✕</button>';
+  let lastTime = 0;
+  globalTrack.forEach(e => {
+    e.deltaTime = e.absoluteTime - lastTime;
+    delete e.absoluteTime;
+    lastTime += e.deltaTime;
+  });
 
-      row.addEventListener('dragstart', () => { dragSrcIdx = i; setTimeout(() => row.classList.add('dragging'), 0); });
-      row.addEventListener('dragend', () => row.classList.remove('dragging'));
-      row.addEventListener('dragover', (e) => { e.preventDefault(); row.classList.add('drag-over'); });
-      row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
-      row.addEventListener('drop', (e) => {
-        e.preventDefault();
-        row.classList.remove('drag-over');
-        if (dragSrcIdx === null || dragSrcIdx === i) return;
-        const moved = files.splice(dragSrcIdx, 1)[0];
-        files.splice(i, 0, moved);
-        renderList();
-      });
+  // Add endOfTrack events
+  outputTracks.forEach(track => {
+    track.push({ deltaTime: 0, meta: true, type: "endOfTrack" });
+  });
 
-      row.querySelector('.remove-btn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        files.splice(parseInt(e.currentTarget.dataset.idx), 1);
-        renderList();
-        setStatus(files.length ? files.length + ' file' + (files.length !== 1 ? 's' : '') + ' loaded' : '', '');
-      });
+  globalTrack.push({ deltaTime: 0, meta: true, type: "endOfTrack" });
 
-      fileList.appendChild(row);
-    });
-
-    mergeBtn.disabled = files.length < 2;
-    clearBtn.disabled = files.length === 0;
-  }
-
-  clearBtn.onclick = () => {
-    files = [];
-    renderList();
-    setStatus('', '');
-    fileInput.value = '';
+  // Final MIDI structure
+  const finalMidi = {
+    header: header,
+    tracks: [globalTrack, ...outputTracks]
   };
 
-  mergeBtn.onclick = async () => {
-    setStatus('Reading files...', '');
-    mergeBtn.disabled = true;
-    try {
-      const buffers = await Promise.all(files.map(f => f.arrayBuffer()));
-      const result = mergeToType1(buffers);
-      const outName = document.getElementById('outName').value.trim() || 'merged_output.mid';
-      downloadBytes(result, outName.endsWith('.mid') ? outName : outName + '.mid');
-      setStatus('Done! ' + files.length + ' tracks merged successfully.', 'ok');
-    } catch (err) {
-      setStatus('Error: ' + err.message, 'err');
-    }
-    mergeBtn.disabled = files.length < 2;
-  };
+  const bytes = MidiFile.writeMidi(finalMidi);
+  const blob = new Blob([new Uint8Array(bytes)], { type: "audio/midi" });
 
-  // ── MIDI parsing & writing ──────────────────────────────────────────────────
-
-  function readU32(d, o) { return ((d[o] << 24) | (d[o+1] << 16) | (d[o+2] << 8) | d[o+3]) >>> 0; }
-  function readU16(d, o) { return ((d[o] << 8) | d[o+1]) >>> 0; }
-
-  function parseMidi(buffer, filename) {
-    const d = new Uint8Array(buffer);
-    const tag = String.fromCharCode(d[0], d[1], d[2], d[3]);
-    if (tag !== 'MThd') throw new Error(filename + ' is not a valid MIDI file.');
-
-    const timeDivision = readU16(d, 12);
-    const numTracks = readU16(d, 10);
-    const tracks = [];
-    let pos = 14;
-
-    for (let t = 0; t < numTracks; t++) {
-      if (pos + 8 > d.length) break;
-      const chunkTag = String.fromCharCode(d[pos], d[pos+1], d[pos+2], d[pos+3]);
-      const chunkLen = readU32(d, pos + 4);
-      if (chunkTag === 'MTrk') {
-        tracks.push(d.slice(pos + 8, pos + 8 + chunkLen));
-      }
-      pos += 8 + chunkLen;
-    }
-
-    if (tracks.length === 0) throw new Error(filename + ' contains no track data.');
-    return { timeDivision, tracks };
-  }
-
-  function mergeToType1(buffers) {
-    const parsed = buffers.map((buf, i) => parseMidi(buf, files[i].name));
-
-    // Use time division from first file
-    const timeDivision = parsed[0].timeDivision;
-
-    // Collect all tracks from all files
-    const allTracks = [];
-    parsed.forEach(p => p.tracks.forEach(t => allTracks.push(t)));
-
-    // Calculate total output size
-    const headerSize = 14;
-    const trackSizes = allTracks.map(t => 8 + t.length);
-    const totalSize = headerSize + trackSizes.reduce((a, b) => a + b, 0);
-
-    const out = new Uint8Array(totalSize);
-    let pos = 0;
-
-    // Write MThd header
-    out.set([0x4D,0x54,0x68,0x64], pos); pos += 4; // "MThd"
-    out.set([0x00,0x00,0x00,0x06], pos); pos += 4; // length = 6
-    out[pos++] = 0x00; out[pos++] = 0x01;           // format = 1 (multitrack)
-    out[pos++] = (allTracks.length >> 8) & 0xFF;
-    out[pos++] = allTracks.length & 0xFF;            // num tracks
-    out[pos++] = (timeDivision >> 8) & 0xFF;
-    out[pos++] = timeDivision & 0xFF;                // time division
-
-    // Write each MTrk chunk
-    allTracks.forEach(track => {
-      out.set([0x4D,0x54,0x72,0x6B], pos); pos += 4; // "MTrk"
-      const len = track.length;
-      out[pos++] = (len >> 24) & 0xFF;
-      out[pos++] = (len >> 16) & 0xFF;
-      out[pos++] = (len >> 8) & 0xFF;
-      out[pos++] = len & 0xFF;
-      out.set(track, pos); pos += len;
-    });
-
-    return out;
-  }
-
-  function downloadBytes(uint8Array, filename) {
-    const blob = new Blob([uint8Array], { type: 'audio/midi' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function setStatus(msg, type) {
-    statusEl.textContent = msg;
-    statusEl.className = 'status' + (type ? ' ' + type : '');
-  }
-
-  function escHtml(str) {
-    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "merged.mid";
+  a.click();
+}
 </script>
+
 </body>
 </html>
