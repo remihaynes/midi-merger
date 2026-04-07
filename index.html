@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <title>MIDI Merger</title>
-
 <style>
+  * { box-sizing: border-box; }
+
   body {
     background-color: #1b140f;
     color: #e6d3b3;
@@ -29,10 +30,19 @@
     pointer-events: none;
   }
 
+  #vineCanvas {
+    position: absolute;
+    top: 0; left: 0;
+    pointer-events: none;
+    z-index: 1;
+    image-rendering: pixelated;
+  }
+
   h3 {
     color: #f2e6d0;
     margin-bottom: 30px;
     z-index: 2;
+    position: relative;
   }
 
   .center-column {
@@ -41,6 +51,7 @@
     align-items: center;
     gap: 20px;
     z-index: 2;
+    position: relative;
   }
 
   input, button {
@@ -53,29 +64,13 @@
     font-size: 15px;
   }
 
-  button {
-    cursor: pointer;
-    transition: 0.2s;
-  }
-
-  button:hover {
-    background: #4a3426;
-  }
-
-  .vine-canvas {
-    position: absolute;
-    top: 0;
-    pointer-events: none;
-    z-index: 1;
-    image-rendering: pixelated;
-  }
-
-  .vine-canvas.left { left: 0; }
-  .vine-canvas.right { right: 0; }
+  button { cursor: pointer; transition: 0.2s; }
+  button:hover { background: #4a3426; }
 
   .piano {
     margin-top: 60px;
     z-index: 2;
+    position: relative;
     animation: float 4s ease-in-out infinite;
   }
 
@@ -92,189 +87,235 @@
   }
 </style>
 </head>
-
 <body>
 
-<canvas class="vine-canvas left" id="vineLeft"></canvas>
-<canvas class="vine-canvas right" id="vineRight"></canvas>
+<canvas id="vineCanvas"></canvas>
 
 <h3>MIDI Merger</h3>
-
 <div class="center-column">
   <input type="file" id="files" multiple accept=".mid,.midi">
   <button onclick="mergeMidi()">Merge & Download</button>
 </div>
-
 <div class="piano">
   <img src="piano.gif" alt="pixel piano">
 </div>
 
 <script>
-(function() {
+(function () {
   const PX = 6;
+  const STEMS  = ['#2d7a1f','#3a9926','#1f5c12','#4ab830','#266b18'];
+  const LEAVES = ['#3cba28','#4fd63a','#28a01a','#5ee048','#34c424'];
+  const SHADOW = '#1a4a0e';
+  const HANGS  = ['#4fd63a','#3cba28','#28a01a','#5ee048'];
 
-  const STEM_COLORS = [
-    '#2d7a1f', '#3a9926', '#1f5c12', '#4ab830', '#266b18'
-  ];
-  const LEAF_COLORS = [
-    '#3cba28', '#4fd63a', '#28a01a', '#5ee048', '#34c424'
-  ];
-  const SHADOW_COLOR = '#1a4a0e';
-  const HANG_COLORS = [
-    '#4fd63a', '#3cba28', '#28a01a', '#5ee048'
-  ];
+  // ellipse around the UI buttons — vines stay out
+  const SAFE = { cx: 0.5, cy: 0.30, rw: 0.20, rh: 0.20 };
 
-  const W_TILES = 14;
-  const W_PX = W_TILES * PX;
+  const canvas = document.getElementById('vineCanvas');
+  const ctx = canvas.getContext('2d');
+  let W, H, WT, HT;
+  let mouse = { tx: -99, ty: -99 };
 
-  function setupCanvas(id) {
-    const c = document.getElementById(id);
-    const h = window.innerHeight;
-    c.width = W_PX;
-    c.height = h;
-    c.style.width = W_PX + 'px';
-    c.style.height = h + 'px';
-    return c;
+  function resize() {
+    W = window.innerWidth; H = window.innerHeight;
+    WT = Math.ceil(W / PX); HT = Math.ceil(H / PX);
+    canvas.width = W; canvas.height = H;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  }
+  resize();
+  window.addEventListener('resize', () => { resize(); initAll(); });
+
+  document.addEventListener('mousemove', e => {
+    mouse.tx = Math.floor(e.clientX / PX);
+    mouse.ty = Math.floor(e.clientY / PX);
+  });
+
+  function inSafe(tx, ty) {
+    const px = tx / WT, py = ty / HT;
+    const dx = (px - SAFE.cx) / SAFE.rw;
+    const dy = (py - SAFE.cy) / SAFE.rh;
+    return dx*dx + dy*dy < 1;
   }
 
-  function drawPixel(ctx, tx, ty, color) {
+  function dp(tx, ty, color) {
+    if (tx < 0 || ty < 0 || tx >= WT || ty >= HT) return false;
+    if (inSafe(tx, ty)) return false;
     ctx.fillStyle = color;
-    ctx.fillRect(tx * PX, ty * PX, PX, PX);
+    ctx.fillRect(tx*PX, ty*PX, PX, PX);
+    return true;
   }
 
-  function drawLeaf(ctx, tx, ty, dir, colorIdx) {
-    const base = LEAF_COLORS[colorIdx % LEAF_COLORS.length];
-    const shadow = SHADOW_COLOR;
+  function drawLeaf(tx, ty, dir, ci) {
+    const b = LEAVES[ci % LEAVES.length];
     if (dir === 'r') {
-      drawPixel(ctx, tx,   ty,   base);
-      drawPixel(ctx, tx+1, ty,   base);
-      drawPixel(ctx, tx+1, ty+1, base);
-      drawPixel(ctx, tx,   ty+1, shadow);
-      drawPixel(ctx, tx+2, ty,   shadow);
+      dp(tx,   ty,   b); dp(tx+1, ty,   b);
+      dp(tx+1, ty+1, b); dp(tx,   ty+1, SHADOW); dp(tx+2, ty, SHADOW);
     } else {
-      drawPixel(ctx, tx,   ty,   base);
-      drawPixel(ctx, tx-1, ty,   base);
-      drawPixel(ctx, tx-1, ty+1, base);
-      drawPixel(ctx, tx,   ty+1, shadow);
-      drawPixel(ctx, tx-2, ty,   shadow);
+      dp(tx,   ty,   b); dp(tx-1, ty,   b);
+      dp(tx-1, ty+1, b); dp(tx,   ty+1, SHADOW); dp(tx-2, ty, SHADOW);
     }
   }
 
-  function drawHangingVine(ctx, tx, ty, len, colorIdx) {
+  function drawHang(tx, ty, len, ci) {
     for (let i = 0; i < len; i++) {
-      const c = HANG_COLORS[(colorIdx + i) % HANG_COLORS.length];
-      const jitter = (i % 2 === 0) ? 0 : (Math.random() > 0.5 ? 1 : 0);
-      drawPixel(ctx, tx + jitter, ty + i, c);
-      if (i === len - 1) {
-        drawPixel(ctx, tx + jitter, ty + i + 1, SHADOW_COLOR);
-      }
+      const c = HANGS[(ci+i) % HANGS.length];
+      const j = i % 2 === 0 ? 0 : (Math.random() > .5 ? 1 : 0);
+      dp(tx+j, ty+i, c);
+      if (i === len-1) dp(tx+j, ty+i+1, SHADOW);
     }
   }
 
-  class VineSystem {
-    constructor(canvas, mirrored) {
-      this.canvas = canvas;
-      this.ctx = canvas.getContext('2d');
-      this.mirrored = mirrored;
-      this.H_TILES = Math.ceil(canvas.height / PX) + 4;
-      this.segments = [];
-      this.hangers = [];
-      this.growthTick = 0;
-      this.maxTick = this.H_TILES;
-      this.colorSeed = 0;
-      this.init();
-    }
-
-    init() {
-      this.segments = [];
-      this.hangers = [];
-      this.growthTick = 0;
-      const numStems = 3 + Math.floor(Math.random() * 2);
-      for (let i = 0; i < numStems; i++) {
-        const startX = 1 + Math.floor(Math.random() * (W_TILES - 3));
-        this.segments.push({
-          x: startX,
-          y: -2 - Math.floor(Math.random() * 8),
-          dx: (Math.random() > 0.5 ? 1 : -1),
-          colorIdx: i,
-          leafTimer: 0,
-          leafSide: Math.random() > 0.5 ? 'r' : 'l',
-          hangTimer: 0,
-        });
-      }
+  // ---------- Seg: a growing vine arm ----------
+  class Seg {
+    constructor(x, y, dx, dy, ci, delay) {
+      this.x = x; this.y = y;
+      this.dx = dx; this.dy = dy;
+      this.ci = ci;
+      this.leafTimer = 0; this.leafSide = Math.random() > .5 ? 'r' : 'l';
+      this.hangTimer = 0;
+      this.alive = true;
+      this.age = -(delay || 0);
     }
 
     tick() {
-      const ctx = this.ctx;
-      this.growthTick++;
+      if (!this.alive) return;
+      if (this.age < 0) { this.age++; return; }
 
-      this.segments.forEach(seg => {
-        if (seg.y > this.H_TILES) return;
+      const tx = Math.round(this.x), ty = Math.round(this.y);
+      if (!dp(tx, ty, STEMS[this.ci % STEMS.length])) { this.alive = false; return; }
 
-        const stemColor = STEM_COLORS[seg.colorIdx % STEM_COLORS.length];
-        const ty = seg.y;
-        const tx = Math.max(0, Math.min(W_TILES - 2, seg.x));
+      // leaf every few steps
+      this.leafTimer++;
+      if (this.leafTimer >= 3 + Math.floor(Math.random()*3)) {
+        this.leafTimer = 0;
+        drawLeaf(tx, ty, this.leafSide, this.ci);
+        this.leafSide = this.leafSide === 'r' ? 'l' : 'r';
+        this.ci = (this.ci+1) % LEAVES.length;
+      }
 
-        drawPixel(ctx, tx, ty, stemColor);
-        drawPixel(ctx, tx, ty + 1, SHADOW_COLOR);
+      // hanging drips
+      this.hangTimer++;
+      if (this.hangTimer >= 5 + Math.floor(Math.random()*6)) {
+        this.hangTimer = 0;
+        const hx = tx + (this.dy !== 0 ? (Math.random()>.5?1:-1) : 0);
+        const hy = ty + (this.dx !== 0 ? (Math.random()>.5?1:-1) : 0);
+        drawHang(hx, hy, 2+Math.floor(Math.random()*5), this.ci);
+      }
 
-        seg.leafTimer++;
-        if (seg.leafTimer >= 3 + Math.floor(Math.random() * 3)) {
-          seg.leafTimer = 0;
-          const leafDir = seg.leafSide;
-          const leafX = leafDir === 'r'
-            ? Math.min(tx + 1, W_TILES - 3)
-            : Math.max(tx - 1, 2);
-          drawLeaf(ctx, leafX, ty, leafDir, seg.colorIdx);
-          seg.leafSide = seg.leafSide === 'r' ? 'l' : 'r';
-          seg.colorIdx = (seg.colorIdx + 1) % LEAF_COLORS.length;
+      // gentle wander
+      if (Math.random() < 0.20) {
+        if (Math.abs(this.dy) > Math.abs(this.dx)) {
+          this.dx += (Math.random()>.5 ? 0.15 : -0.15);
+          this.dx = Math.max(-0.7, Math.min(0.7, this.dx));
+        } else {
+          this.dy += (Math.random()>.5 ? 0.1 : -0.1);
         }
+      }
 
-        seg.hangTimer++;
-        if (seg.hangTimer >= 6 + Math.floor(Math.random() * 5)) {
-          seg.hangTimer = 0;
-          const hangLen = 2 + Math.floor(Math.random() * 4);
-          const hangX = Math.max(0, Math.min(W_TILES - 2, tx + (Math.random() > 0.5 ? 1 : -1)));
-          this.hangers.push({ x: hangX, y: ty, len: hangLen, colorIdx: seg.colorIdx });
-        }
+      this.x += this.dx * (0.6 + Math.random()*0.6);
+      this.y += this.dy * (0.6 + Math.random()*0.6);
+      this.age++;
 
-        if (Math.random() < 0.15) {
-          seg.dx = (Math.random() > 0.5 ? 1 : -1);
-        }
-        seg.x = Math.max(1, Math.min(W_TILES - 2, seg.x + (Math.random() < 0.3 ? seg.dx : 0)));
-        seg.y += 1;
-      });
-
-      this.hangers.forEach(h => {
-        if (h.y >= 0 && h.y < this.H_TILES) {
-          drawHangingVine(ctx, h.x, h.y, h.len, h.colorIdx);
-        }
-      });
-
-      const allDone = this.segments.every(s => s.y > this.H_TILES);
-      if (allDone) {
-        setTimeout(() => {
-          ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-          this.init();
-        }, 1800);
+      // occasional branch
+      if (this.age > 10 && Math.random() < 0.025) {
+        const bdy = this.dy !== 0 ? this.dx * 0.5 : this.dy * 0.5 + (this.dy>0?0.5:0);
+        const bdx = this.dx !== 0 ? this.dy * 0.5 : this.dx;
+        segs.push(new Seg(tx, ty, bdx * 0.7, bdy + 0.3, this.ci, 0));
       }
     }
   }
 
-  const leftCanvas = setupCanvas('vineLeft');
-  const rightCanvas = setupCanvas('vineRight');
+  let segs = [];
 
-  const leftVines = new VineSystem(leftCanvas, false);
-  const rightVines = new VineSystem(rightCanvas, true);
+  // ---------- Mouse tendril ----------
+  class MouseTendril {
+    constructor(sx, sy) {
+      this.x = sx; this.y = sy;
+      this.ci = Math.floor(Math.random()*STEMS.length);
+      this.alive = true; this.stuck = 0;
+    }
+    tick() {
+      if (!this.alive) return;
+      const tx = Math.round(this.x), ty = Math.round(this.y);
+      const mdx = mouse.tx - tx, mdy = mouse.ty - ty;
+      const dist = Math.sqrt(mdx*mdx + mdy*mdy);
+      if (dist < 2) { this.stuck++; if (this.stuck > 15) this.alive=false; return; }
+      this.stuck = 0;
 
-  let lastTime = 0;
-  const TICK_MS = 120;
+      let nx = tx + Math.sign(mdx) * (Math.random()<0.75?1:0) + (Math.random()<0.15?(Math.random()>.5?1:-1):0);
+      let ny = ty + Math.sign(mdy) * (Math.random()<0.75?1:0) + (Math.random()<0.15?(Math.random()>.5?1:-1):0);
+
+      if (!dp(nx, ny, STEMS[this.ci % STEMS.length])) { this.alive=false; return; }
+      if (Math.random() < 0.25) drawLeaf(nx, ny, Math.random()>.5?'r':'l', this.ci);
+      this.x = nx; this.y = ny;
+      this.ci = (this.ci+1) % STEMS.length;
+    }
+  }
+
+  let mouseTendril = null;
+
+  function spawnTendril() {
+    if (mouseTendril && mouseTendril.alive) return;
+    if (mouse.tx < 0 || inSafe(mouse.tx, mouse.ty)) return;
+    const dL=mouse.tx, dR=WT-mouse.tx, dT=mouse.ty, dB=HT-mouse.ty;
+    const mn=Math.min(dL,dR,dT,dB);
+    let sx,sy;
+    if (mn===dL)      { sx=0;    sy=mouse.ty; }
+    else if (mn===dR) { sx=WT-1; sy=mouse.ty; }
+    else if (mn===dT) { sx=mouse.tx; sy=0; }
+    else              { sx=mouse.tx; sy=HT-1; }
+    mouseTendril = new MouseTendril(sx, sy);
+  }
+
+  function initAll() {
+    segs = [];
+    mouseTendril = null;
+    ctx.clearRect(0,0,W,H);
+
+    // edge spawn points: [x, y, dx, dy, delay]
+    const roots = [
+      // left wall, top-to-bottom
+      [0, 0,       0.15, 1,    0],
+      [0, HT*0.28, 0.2,  1,   15],
+      [0, HT*0.55, 0.1,  1,   30],
+      [0, HT*0.75, 0.25,-0.5, 20],
+      // right wall
+      [WT-1, 0,        -0.15, 1,    5],
+      [WT-1, HT*0.35,  -0.2,  1,   20],
+      [WT-1, HT*0.6,   -0.1,  1,   35],
+      [WT-1, HT*0.8,   -0.25,-0.5, 25],
+      // top edge crawlers
+      [WT*0.12, 0,  0.5,  0.8,  8],
+      [WT*0.38, 0, -0.1,  1,   12],
+      [WT*0.62, 0,  0.1,  1,   12],
+      [WT*0.88, 0, -0.5,  0.8,  8],
+      // bottom corner crawlers going up and inward
+      [0,    HT-1,  0.4, -0.7, 10],
+      [WT-1, HT-1, -0.4, -0.7, 10],
+      [WT*0.18, HT-1,  0.2, -1, 18],
+      [WT*0.82, HT-1, -0.2, -1, 18],
+    ];
+
+    roots.forEach(([x,y,dx,dy,delay], i) => {
+      segs.push(new Seg(x, y, dx, dy, i % STEMS.length, delay));
+    });
+  }
+
+  initAll();
+
+  let last = 0, tendrTick = 0;
+  const TICK = 115;
 
   function loop(ts) {
-    if (ts - lastTime >= TICK_MS) {
-      lastTime = ts;
-      leftVines.tick();
-      rightVines.tick();
+    if (ts - last >= TICK) {
+      last = ts;
+      segs.forEach(s => s.tick());
+      segs = segs.filter(s => s.alive);
+      if (segs.length < 5) initAll();
+
+      tendrTick++;
+      if (tendrTick > 25) { tendrTick = 0; spawnTendril(); }
+      if (mouseTendril) mouseTendril.tick();
     }
     requestAnimationFrame(loop);
   }
@@ -289,14 +330,9 @@ import { parseMidi, writeMidi } from "https://cdn.jsdelivr.net/npm/midi-file@1.2
 window.mergeMidi = async function () {
   try {
     const files = document.getElementById("files").files;
-    if (!files.length) {
-      alert("Select MIDI files.");
-      return;
-    }
+    if (!files.length) { alert("Select MIDI files."); return; }
 
-    const parsed = [];
-    const names = [];
-
+    const parsed = [], names = [];
     for (let f of files) {
       const buf = await f.arrayBuffer();
       parsed.push(parseMidi(new Uint8Array(buf)));
@@ -304,96 +340,57 @@ window.mergeMidi = async function () {
     }
 
     const ticksPerBeat = parsed[0].header.ticksPerBeat;
-
-    const globalTrack = [];
-    const outputTracks = [];
+    const globalTrack = [], outputTracks = [];
     let channel = 0;
 
     function rebuild(track) {
       track.sort((a,b)=>a.time-b.time);
       let last = 0;
-      return track.map(e=>{
-        const delta = e.time - last;
-        last = e.time;
-        delete e.time;
-        return {...e, deltaTime: delta};
-      });
+      return track.map(e=>{ const d=e.time-last; last=e.time; delete e.time; return {...e,deltaTime:d}; });
     }
 
-    parsed.forEach((midi, fileIndex)=>{
-      midi.tracks.forEach((track, tIndex)=>{
-        let time = 0;
-        let newTrack = [];
-        let name = null;
-
-        track.forEach(event=>{
-          time += event.deltaTime;
-          const e = structuredClone(event);
-
-          if (e.meta && e.type === "trackName") name = e.text;
-
-          if (e.meta && (
-            e.type === "setTempo" ||
-            e.type === "timeSignature" ||
-            e.type === "keySignature"
-          )) {
-            if (fileIndex === 0 && tIndex === 0) {
-              globalTrack.push({...e, time});
-            }
+    parsed.forEach((midi, fi)=>{
+      midi.tracks.forEach((track, ti)=>{
+        let time=0, newTrack=[], name=null;
+        track.forEach(ev=>{
+          time += ev.deltaTime;
+          const e = structuredClone(ev);
+          if (e.meta && e.type==="trackName") name=e.text;
+          if (e.meta && (e.type==="setTempo"||e.type==="timeSignature"||e.type==="keySignature")) {
+            if (fi===0&&ti===0) globalTrack.push({...e,time});
             return;
           }
-
-          if (e.channel !== undefined) e.channel = channel % 16;
-          newTrack.push({...e, time});
+          if (e.channel!==undefined) e.channel=channel%16;
+          newTrack.push({...e,time});
         });
-
-        if (!name) name = names[fileIndex] + "_Track_" + (tIndex+1);
-
-        newTrack.push({ time: 0, meta: true, type: "trackName", text: name });
-
-        newTrack = rebuild(newTrack);
-
-        const totalTime = newTrack.reduce((sum, e) => sum + e.deltaTime, 0);
-        newTrack.totalTime = totalTime;
-
+        if (!name) name=names[fi]+"_Track_"+(ti+1);
+        newTrack.push({time:0,meta:true,type:"trackName",text:name});
+        newTrack=rebuild(newTrack);
+        newTrack.totalTime=newTrack.reduce((s,e)=>s+e.deltaTime,0);
         outputTracks.push(newTrack);
         channel++;
       });
     });
 
-    let maxTime = 0;
-    outputTracks.forEach(t => { if (t.totalTime > maxTime) maxTime = t.totalTime; });
-
-    outputTracks.forEach(track => {
-      const current = track.reduce((sum, e) => sum + e.deltaTime, 0);
-      track.push({
-        deltaTime: Math.max(0, maxTime - current),
-        meta: true,
-        type: "endOfTrack"
-      });
+    let maxTime=0;
+    outputTracks.forEach(t=>{if(t.totalTime>maxTime)maxTime=t.totalTime;});
+    outputTracks.forEach(track=>{
+      const cur=track.reduce((s,e)=>s+e.deltaTime,0);
+      track.push({deltaTime:Math.max(0,maxTime-cur),meta:true,type:"endOfTrack"});
     });
 
-    const finalGlobal = rebuild(globalTrack);
-    finalGlobal.unshift({ deltaTime: 0, meta: true, type: "trackName", text: "Global" });
-    finalGlobal.push({ deltaTime: maxTime, meta: true, type: "endOfTrack" });
+    const fg=rebuild(globalTrack);
+    fg.unshift({deltaTime:0,meta:true,type:"trackName",text:"Global"});
+    fg.push({deltaTime:maxTime,meta:true,type:"endOfTrack"});
 
-    const finalMidi = {
-      header: { format: 1, numTracks: outputTracks.length + 1, ticksPerBeat },
-      tracks: [finalGlobal, ...outputTracks]
-    };
-
-    const bytes = writeMidi(finalMidi);
-    const blob = new Blob([new Uint8Array(bytes)], {type:"audio/midi"});
-
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "merged.mid";
+    const finalMidi={header:{format:1,numTracks:outputTracks.length+1,ticksPerBeat},tracks:[fg,...outputTracks]};
+    const bytes=writeMidi(finalMidi);
+    const blob=new Blob([new Uint8Array(bytes)],{type:"audio/midi"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="merged.mid";
     a.click();
-
-  } catch (e) {
-    console.error(e);
-    alert("Error — check console (F12)");
-  }
+  } catch(e) { console.error(e); alert("Error — check console (F12)"); }
 };
 </script>
 
