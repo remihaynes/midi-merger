@@ -6,21 +6,21 @@
 
 <style>
   body {
-    background-color: #121212;
-    color: #e0e0e0;
+    background-color: #1b140f; /* deep brown */
+    color: #e6d3b3;
     font-family: "Consolas", monospace;
     display: flex;
     flex-direction: column;
-    align-items: center;   /* center horizontally */
-    justify-content: flex-start; /* push content to top */
+    align-items: center;
+    justify-content: flex-start;
     height: 100vh;
     margin: 0;
-    padding-top: 80px; /* pushes content slightly down from top */
+    padding-top: 80px;
     overflow: hidden;
   }
 
   h3 {
-    color: #ffffff;
+    color: #f2e6d0;
     margin-bottom: 30px;
   }
 
@@ -33,9 +33,9 @@
 
   input, button {
     font-family: "Consolas", monospace;
-    background: #1f1f1f;
-    color: #e0e0e0;
-    border: 1px solid #444;
+    background: #3a2a1f;
+    color: #e6d3b3;
+    border: 1px solid #5a3e2b;
     padding: 10px 20px;
     border-radius: 6px;
     font-size: 15px;
@@ -47,35 +47,68 @@
   }
 
   button:hover {
-    background: #2a2a2a;
+    background: #4a3426;
   }
 
-  /* --- Piano GIF --- */
-  .piano {
-    margin-top: 40px;
-    opacity: 0.9;
-  }
-
-  .piano img {
-    width: 120px;
-  }
-
-  /* --- Vine decorations --- */
-  .vine-left, .vine-right {
+  /* 🌱 VINES */
+  .vine {
     position: absolute;
+    width: 120px;
+    height: 100%;
     top: 0;
-    width: 150px;
-    opacity: 0.4;
     pointer-events: none;
+    opacity: 0.6;
   }
 
-  .vine-left {
+  .vine.left {
     left: 0;
   }
 
-  .vine-right {
+  .vine.right {
     right: 0;
     transform: scaleX(-1);
+  }
+
+  .vine span {
+    position: absolute;
+    width: 6px;
+    height: 80px;
+    background: linear-gradient(#2f7a3e, #1f5a2a);
+    border-radius: 10px;
+    animation: grow 6s linear infinite;
+  }
+
+  .vine span:nth-child(1) { left: 20px; animation-delay: 0s; }
+  .vine span:nth-child(2) { left: 50px; animation-delay: 2s; }
+  .vine span:nth-child(3) { left: 80px; animation-delay: 4s; }
+
+  @keyframes grow {
+    0% { top: 100%; height: 0; }
+    100% { top: -100px; height: 200px; }
+  }
+
+  /* 🎹 PIXEL PIANO */
+  .piano {
+    margin-top: 50px;
+    display: flex;
+    gap: 2px;
+  }
+
+  .key {
+    width: 16px;
+    height: 60px;
+    background: #f5f0e6;
+    border: 1px solid #000;
+  }
+
+  .key.black {
+    width: 10px;
+    height: 40px;
+    background: #111;
+    margin-left: -8px;
+    margin-right: -8px;
+    z-index: 2;
+    position: relative;
   }
 
 </style>
@@ -84,8 +117,13 @@
 <body>
 
 <!-- Vines -->
-<img class="vine-left" src="https://upload.wikimedia.org/wikipedia/commons/3/3f/Vine_PNG.png">
-<img class="vine-right" src="https://upload.wikimedia.org/wikipedia/commons/3/3f/Vine_PNG.png">
+<div class="vine left">
+  <span></span><span></span><span></span>
+</div>
+
+<div class="vine right">
+  <span></span><span></span><span></span>
+</div>
 
 <h3>MIDI Merger</h3>
 
@@ -94,9 +132,16 @@
   <button onclick="mergeMidi()">Merge & Download</button>
 </div>
 
-<!-- Piano GIF -->
+<!-- Pixel piano -->
 <div class="piano">
-  <img src="https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif" alt="piano gif">
+  <div class="key"></div>
+  <div class="key black"></div>
+  <div class="key"></div>
+  <div class="key black"></div>
+  <div class="key"></div>
+  <div class="key"></div>
+  <div class="key black"></div>
+  <div class="key"></div>
 </div>
 
 <script type="module">
@@ -146,12 +191,9 @@ window.mergeMidi = async function () {
 
         track.forEach(event=>{
           time += event.deltaTime;
-
           const e = structuredClone(event);
 
-          if (e.meta && e.type === "trackName") {
-            name = e.text;
-          }
+          if (e.meta && e.type === "trackName") name = e.text;
 
           if (e.meta && (
             e.type === "setTempo" ||
@@ -164,23 +206,14 @@ window.mergeMidi = async function () {
             return;
           }
 
-          if (e.channel !== undefined) {
-            e.channel = channel % 16;
-          }
+          if (e.channel !== undefined) e.channel = channel % 16;
 
           newTrack.push({...e, time});
         });
 
-        if (!name) {
-          name = names[fileIndex] + "_Track_" + (tIndex+1);
-        }
+        if (!name) name = names[fileIndex] + "_Track_" + (tIndex+1);
 
-        newTrack.push({
-          time: 0,
-          meta: true,
-          type: "trackName",
-          text: name
-        });
+        newTrack.push({ time: 0, meta: true, type: "trackName", text: name });
 
         newTrack = rebuild(newTrack);
 
@@ -193,40 +226,23 @@ window.mergeMidi = async function () {
     });
 
     let maxTime = 0;
-    outputTracks.forEach(t => {
-      if (t.totalTime > maxTime) maxTime = t.totalTime;
-    });
+    outputTracks.forEach(t => { if (t.totalTime > maxTime) maxTime = t.totalTime; });
 
     outputTracks.forEach(track => {
       const current = track.reduce((sum, e) => sum + e.deltaTime, 0);
-      const remaining = maxTime - current;
-
       track.push({
-        deltaTime: remaining > 0 ? remaining : 0,
+        deltaTime: Math.max(0, maxTime - current),
         meta: true,
         type: "endOfTrack"
       });
     });
 
     const finalGlobal = rebuild(globalTrack);
-    finalGlobal.unshift({
-      deltaTime: 0,
-      meta: true,
-      type: "trackName",
-      text: "Global"
-    });
-    finalGlobal.push({
-      deltaTime: maxTime,
-      meta: true,
-      type: "endOfTrack"
-    });
+    finalGlobal.unshift({ deltaTime: 0, meta: true, type: "trackName", text: "Global" });
+    finalGlobal.push({ deltaTime: maxTime, meta: true, type: "endOfTrack" });
 
     const finalMidi = {
-      header: {
-        format: 1,
-        numTracks: outputTracks.length + 1,
-        ticksPerBeat
-      },
+      header: { format: 1, numTracks: outputTracks.length + 1, ticksPerBeat },
       tracks: [finalGlobal, ...outputTracks]
     };
 
