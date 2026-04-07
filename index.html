@@ -12,51 +12,57 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: center;
     height: 100vh;
-    padding-top: 50px;
+    margin: 0;
   }
 
   h3 {
     color: #ffffff;
-    margin-bottom: 20px;
+    margin-bottom: 40px;
   }
 
-  /* Center file input and button */
+  /* Centered vertical stack for input + button */
+  .center-column {
+    display: flex;
+    flex-direction: column;  /* vertical stack */
+    align-items: center;     /* horizontal center */
+    justify-content: center; /* vertical center inside container */
+    gap: 20px;               /* space between input and button */
+  }
+
   input[type="file"], 
   button {
-      display: block;
-      margin: 10px auto;
-      color: #e0e0e0; /* ensures text in file input is visible */
       font-family: "Consolas", monospace;
+      color: #e0e0e0;
+      background-color: #1f1f1f;
+      border: 1px solid #444;
+      padding: 10px 20px;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.2s ease;
   }
 
-  /* Button styling */
-  button {
+  input[type="file"] {
     background-color: #1f1f1f;
-    border: 1px solid #444;
-    padding: 10px 20px;
-    cursor: pointer;
-    border-radius: 5px;
-    font-size: 16px;
-    transition: all 0.2s ease;
   }
 
   button:hover { background-color: #2a2a2a; border-color: #666; }
   button:active { background-color: #333; }
 
-  /* Responsive for small screens */
   @media (max-width: 500px) {
-    body { padding: 20px; }
-    button { width: 100%; }
+    input[type="file"], button { width: 80%; }
   }
 </style>
 </head>
 <body>
 
 <h3>MIDI Merger</h3>
-<input type="file" id="files" multiple accept=".mid,.midi">
-<button onclick="mergeMidi()">Merge & Download</button>
+<div class="center-column">
+  <input type="file" id="files" multiple accept=".mid,.midi">
+  <button onclick="mergeMidi()">Merge & Download</button>
+</div>
 
 <script type="module">
 import { parseMidi, writeMidi } from "https://cdn.jsdelivr.net/npm/midi-file@1.2.4/+esm";
