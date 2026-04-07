@@ -17,11 +17,23 @@
     margin: 0;
     padding-top: 80px;
     overflow: hidden;
+    position: relative;
+  }
+
+  /* 🌫️ ANALOG TEXTURE */
+  body::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("https://www.transparenttextures.com/patterns/asfalt-dark.png");
+    opacity: 0.25;
+    pointer-events: none;
   }
 
   h3 {
     color: #f2e6d0;
     margin-bottom: 30px;
+    z-index: 2;
   }
 
   .center-column {
@@ -29,6 +41,7 @@
     flex-direction: column;
     align-items: center;
     gap: 20px;
+    z-index: 2;
   }
 
   input, button {
@@ -50,49 +63,60 @@
     background: #4a3426;
   }
 
-  /* 🌱 VINES */
+  /* 🌱 BETTER VINES */
   .vine {
     position: absolute;
-    width: 120px;
+    width: 150px;
     height: 100%;
     top: 0;
     pointer-events: none;
-    opacity: 0.6;
+    z-index: 1;
   }
 
   .vine.left { left: 0; }
-  .vine.right {
-    right: 0;
-    transform: scaleX(-1);
-  }
+  .vine.right { right: 0; transform: scaleX(-1); }
 
   .vine span {
     position: absolute;
-    width: 6px;
-    height: 80px;
-    background: linear-gradient(#2f7a3e, #1f5a2a);
-    border-radius: 10px;
-    animation: grow 6s linear infinite;
+    width: 8px;
+    height: 120px;
+    background: linear-gradient(#3cff88, #0c5f2f);
+    border-radius: 20px;
+    animation: grow 8s linear infinite;
+    box-shadow: 0 0 10px rgba(60,255,136,0.3);
   }
 
   .vine span:nth-child(1) { left: 20px; animation-delay: 0s; }
-  .vine span:nth-child(2) { left: 50px; animation-delay: 2s; }
-  .vine span:nth-child(3) { left: 80px; animation-delay: 4s; }
+  .vine span:nth-child(2) { left: 60px; animation-delay: 2s; }
+  .vine span:nth-child(3) { left: 100px; animation-delay: 4s; }
 
   @keyframes grow {
-    0% { top: 100%; height: 0; }
-    100% { top: -100px; height: 200px; }
+    0% { top: 100%; transform: rotate(0deg); }
+    100% { top: -200px; transform: rotate(20deg); }
   }
 
-  /* 🎹 YOUR GIF */
+  /* 🎹 PIANO */
   .piano {
-    margin-top: 50px;
+    margin-top: 60px;
+    z-index: 2;
+    animation: float 4s ease-in-out infinite;
   }
 
   .piano img {
-    width: 180px;
+    width: 200px;
     image-rendering: pixelated;
-    filter: drop-shadow(0 0 6px rgba(0, 255, 100, 0.2));
+
+    /* 🔥 FIX WHITE BACKGROUND */
+    mix-blend-mode: multiply;
+
+    /* 🌿 GREEN GLOW */
+    filter: drop-shadow(0 0 12px rgba(60,255,136,0.4));
+  }
+
+  /* ✨ FLOAT ANIMATION */
+  @keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
   }
 
 </style>
@@ -100,7 +124,6 @@
 
 <body>
 
-<!-- Vines -->
 <div class="vine left">
   <span></span><span></span><span></span>
 </div>
@@ -116,7 +139,6 @@
   <button onclick="mergeMidi()">Merge & Download</button>
 </div>
 
-<!-- YOUR PIANO GIF -->
 <div class="piano">
   <img src="piano.gif" alt="pixel piano">
 </div>
@@ -159,9 +181,7 @@ window.mergeMidi = async function () {
     }
 
     parsed.forEach((midi, fileIndex)=>{
-
       midi.tracks.forEach((track, tIndex)=>{
-
         let time = 0;
         let newTrack = [];
         let name = null;
@@ -184,7 +204,6 @@ window.mergeMidi = async function () {
           }
 
           if (e.channel !== undefined) e.channel = channel % 16;
-
           newTrack.push({...e, time});
         });
 
