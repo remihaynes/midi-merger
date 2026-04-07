@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>MIDI Merger (Full Fidelity)</title>
+<title>MIDI Merger (Full + Smart)</title>
 </head>
 <body>
 
-<h3>MIDI Merger (Type 1, Full Data)</h3>
+<h3>MIDI Merger (Full Data + Smart Tracks)</h3>
 <input type="file" id="files" multiple accept=".mid,.midi">
 <button onclick="mergeMidi()">Merge & Download</button>
 
@@ -23,15 +23,15 @@ async function mergeMidi() {
   }
 
   const parsedFiles = [];
+  const fileNames = [];
 
-  // Read all MIDI files
   for (let file of files) {
     const buffer = await file.arrayBuffer();
     const midi = MidiFile.parseMidi(new Uint8Array(buffer));
     parsedFiles.push(midi);
+    fileNames.push(file.name.replace(".mid", ""));
   }
 
-  // Use first file header as base
   const header = {
     format: 1,
     numTracks: 0,
@@ -39,32 +39,38 @@ async function mergeMidi() {
   };
 
   const outputTracks = [];
-
-  // --- GLOBAL TRACK (tempo, time signature, etc.) ---
   const globalTrack = [];
 
-  parsedFiles.forEach((midi, index) => {
+  let channelCounter = 0;
+
+  parsedFiles.forEach((midi, fileIndex) => {
+
     midi.tracks.forEach((track, tIndex) => {
 
-      const newTrack = [];
       let absoluteTime = 0;
+      const newTrack = [];
+
+      let trackName = null;
 
       track.forEach(event => {
         absoluteTime += event.deltaTime;
 
-        // Clone event
         const newEvent = JSON.parse(JSON.stringify(event));
-
-        // Normalize deltaTime later
         newEvent.absoluteTime = absoluteTime;
 
-        // Put global/meta events ONLY in first track
+        // Capture track name
+        if (event.meta && event.type === "trackName") {
+          trackName = event.text;
+        }
+
+        // Handle global events
         if (event.meta) {
-          if (event.type === "setTempo" ||
-              event.type === "timeSignature" ||
-              event.type === "keySignature") {
-            
-            if (index === 0 && tIndex === 0) {
+          if (
+            event.type === "setTempo" ||
+            event.type === "timeSignature" ||
+            event.type === "keySignature"
+          ) {
+            if (fileIndex === 0 && tIndex === 0) {
               globalTrack.push(newEvent);
             }
             return;
@@ -74,7 +80,30 @@ async function mergeMidi() {
         newTrack.push(newEvent);
       });
 
-      // Sort + convert back to deltaTime
+      // Assign track name if missing
+      if (!trackName) {
+        trackName = fileNames[fileIndex] + "_Track_" + (tIndex + 1);
+      }
+
+      // Assign MIDI channel (avoid collisions)
+      const assignedChannel = channelCounter % 16;
+      channelCounter++;
+
+      newTrack.forEach(event => {
+        if (event.channel !== undefined) {
+          event.channel = assignedChannel;
+        }
+      });
+
+      // Insert track name at beginning
+      newTrack.unshift({
+        deltaTime: 0,
+        meta: true,
+        type: "trackName",
+        text: trackName
+      });
+
+      // Sort + rebuild deltaTime
       newTrack.sort((a, b) => a.absoluteTime - b.absoluteTime);
 
       let lastTime = 0;
@@ -84,11 +113,13 @@ async function mergeMidi() {
         lastTime += e.deltaTime;
       });
 
+      newTrack.push({ deltaTime: 0, meta: true, type: "endOfTrack" });
+
       outputTracks.push(newTrack);
     });
   });
 
-  // Process global track timing
+  // Process global track
   globalTrack.sort((a, b) => a.absoluteTime - b.absoluteTime);
 
   let lastTime = 0;
@@ -98,14 +129,15 @@ async function mergeMidi() {
     lastTime += e.deltaTime;
   });
 
-  // Add endOfTrack events
-  outputTracks.forEach(track => {
-    track.push({ deltaTime: 0, meta: true, type: "endOfTrack" });
+  globalTrack.unshift({
+    deltaTime: 0,
+    meta: true,
+    type: "trackName",
+    text: "Global"
   });
 
   globalTrack.push({ deltaTime: 0, meta: true, type: "endOfTrack" });
 
-  // Final MIDI structure
   const finalMidi = {
     header: header,
     tracks: [globalTrack, ...outputTracks]
