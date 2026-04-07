@@ -20,7 +20,6 @@
     position: relative;
   }
 
-  /* 🌫️ ANALOG TEXTURE */
   body::before {
     content: "";
     position: absolute;
@@ -63,39 +62,17 @@
     background: #4a3426;
   }
 
-  /* 🌱 BETTER VINES */
-  .vine {
+  .vine-canvas {
     position: absolute;
-    width: 150px;
-    height: 100%;
     top: 0;
     pointer-events: none;
     z-index: 1;
+    image-rendering: pixelated;
   }
 
-  .vine.left { left: 0; }
-  .vine.right { right: 0; transform: scaleX(-1); }
+  .vine-canvas.left { left: 0; }
+  .vine-canvas.right { right: 0; }
 
-  .vine span {
-    position: absolute;
-    width: 8px;
-    height: 120px;
-    background: linear-gradient(#3cff88, #0c5f2f);
-    border-radius: 20px;
-    animation: grow 8s linear infinite;
-    box-shadow: 0 0 10px rgba(60,255,136,0.3);
-  }
-
-  .vine span:nth-child(1) { left: 20px; animation-delay: 0s; }
-  .vine span:nth-child(2) { left: 60px; animation-delay: 2s; }
-  .vine span:nth-child(3) { left: 100px; animation-delay: 4s; }
-
-  @keyframes grow {
-    0% { top: 100%; transform: rotate(0deg); }
-    100% { top: -200px; transform: rotate(20deg); }
-  }
-
-  /* 🎹 PIANO */
   .piano {
     margin-top: 60px;
     z-index: 2;
@@ -105,32 +82,21 @@
   .piano img {
     width: 200px;
     image-rendering: pixelated;
-
-    /* 🔥 FIX WHITE BACKGROUND */
     mix-blend-mode: multiply;
-
-    /* 🌿 GREEN GLOW */
     filter: drop-shadow(0 0 12px rgba(60,255,136,0.4));
   }
 
-  /* ✨ FLOAT ANIMATION */
   @keyframes float {
     0%, 100% { transform: translateY(0px); }
     50% { transform: translateY(-10px); }
   }
-
 </style>
 </head>
 
 <body>
 
-<div class="vine left">
-  <span></span><span></span><span></span>
-</div>
-
-<div class="vine right">
-  <span></span><span></span><span></span>
-</div>
+<canvas class="vine-canvas left" id="vineLeft"></canvas>
+<canvas class="vine-canvas right" id="vineRight"></canvas>
 
 <h3>MIDI Merger</h3>
 
@@ -142,6 +108,180 @@
 <div class="piano">
   <img src="piano.gif" alt="pixel piano">
 </div>
+
+<script>
+(function() {
+  const PX = 6;
+
+  const STEM_COLORS = [
+    '#2d7a1f', '#3a9926', '#1f5c12', '#4ab830', '#266b18'
+  ];
+  const LEAF_COLORS = [
+    '#3cba28', '#4fd63a', '#28a01a', '#5ee048', '#34c424'
+  ];
+  const SHADOW_COLOR = '#1a4a0e';
+  const HANG_COLORS = [
+    '#4fd63a', '#3cba28', '#28a01a', '#5ee048'
+  ];
+
+  const W_TILES = 14;
+  const W_PX = W_TILES * PX;
+
+  function setupCanvas(id) {
+    const c = document.getElementById(id);
+    const h = window.innerHeight;
+    c.width = W_PX;
+    c.height = h;
+    c.style.width = W_PX + 'px';
+    c.style.height = h + 'px';
+    return c;
+  }
+
+  function drawPixel(ctx, tx, ty, color) {
+    ctx.fillStyle = color;
+    ctx.fillRect(tx * PX, ty * PX, PX, PX);
+  }
+
+  function drawLeaf(ctx, tx, ty, dir, colorIdx) {
+    const base = LEAF_COLORS[colorIdx % LEAF_COLORS.length];
+    const shadow = SHADOW_COLOR;
+    if (dir === 'r') {
+      drawPixel(ctx, tx,   ty,   base);
+      drawPixel(ctx, tx+1, ty,   base);
+      drawPixel(ctx, tx+1, ty+1, base);
+      drawPixel(ctx, tx,   ty+1, shadow);
+      drawPixel(ctx, tx+2, ty,   shadow);
+    } else {
+      drawPixel(ctx, tx,   ty,   base);
+      drawPixel(ctx, tx-1, ty,   base);
+      drawPixel(ctx, tx-1, ty+1, base);
+      drawPixel(ctx, tx,   ty+1, shadow);
+      drawPixel(ctx, tx-2, ty,   shadow);
+    }
+  }
+
+  function drawHangingVine(ctx, tx, ty, len, colorIdx) {
+    for (let i = 0; i < len; i++) {
+      const c = HANG_COLORS[(colorIdx + i) % HANG_COLORS.length];
+      const jitter = (i % 2 === 0) ? 0 : (Math.random() > 0.5 ? 1 : 0);
+      drawPixel(ctx, tx + jitter, ty + i, c);
+      if (i === len - 1) {
+        drawPixel(ctx, tx + jitter, ty + i + 1, SHADOW_COLOR);
+      }
+    }
+  }
+
+  class VineSystem {
+    constructor(canvas, mirrored) {
+      this.canvas = canvas;
+      this.ctx = canvas.getContext('2d');
+      this.mirrored = mirrored;
+      this.H_TILES = Math.ceil(canvas.height / PX) + 4;
+      this.segments = [];
+      this.hangers = [];
+      this.growthTick = 0;
+      this.maxTick = this.H_TILES;
+      this.colorSeed = 0;
+      this.init();
+    }
+
+    init() {
+      this.segments = [];
+      this.hangers = [];
+      this.growthTick = 0;
+      const numStems = 3 + Math.floor(Math.random() * 2);
+      for (let i = 0; i < numStems; i++) {
+        const startX = 1 + Math.floor(Math.random() * (W_TILES - 3));
+        this.segments.push({
+          x: startX,
+          y: -2 - Math.floor(Math.random() * 8),
+          dx: (Math.random() > 0.5 ? 1 : -1),
+          colorIdx: i,
+          leafTimer: 0,
+          leafSide: Math.random() > 0.5 ? 'r' : 'l',
+          hangTimer: 0,
+        });
+      }
+    }
+
+    tick() {
+      const ctx = this.ctx;
+      this.growthTick++;
+
+      this.segments.forEach(seg => {
+        if (seg.y > this.H_TILES) return;
+
+        const stemColor = STEM_COLORS[seg.colorIdx % STEM_COLORS.length];
+        const ty = seg.y;
+        const tx = Math.max(0, Math.min(W_TILES - 2, seg.x));
+
+        drawPixel(ctx, tx, ty, stemColor);
+        drawPixel(ctx, tx, ty + 1, SHADOW_COLOR);
+
+        seg.leafTimer++;
+        if (seg.leafTimer >= 3 + Math.floor(Math.random() * 3)) {
+          seg.leafTimer = 0;
+          const leafDir = seg.leafSide;
+          const leafX = leafDir === 'r'
+            ? Math.min(tx + 1, W_TILES - 3)
+            : Math.max(tx - 1, 2);
+          drawLeaf(ctx, leafX, ty, leafDir, seg.colorIdx);
+          seg.leafSide = seg.leafSide === 'r' ? 'l' : 'r';
+          seg.colorIdx = (seg.colorIdx + 1) % LEAF_COLORS.length;
+        }
+
+        seg.hangTimer++;
+        if (seg.hangTimer >= 6 + Math.floor(Math.random() * 5)) {
+          seg.hangTimer = 0;
+          const hangLen = 2 + Math.floor(Math.random() * 4);
+          const hangX = Math.max(0, Math.min(W_TILES - 2, tx + (Math.random() > 0.5 ? 1 : -1)));
+          this.hangers.push({ x: hangX, y: ty, len: hangLen, colorIdx: seg.colorIdx });
+        }
+
+        if (Math.random() < 0.15) {
+          seg.dx = (Math.random() > 0.5 ? 1 : -1);
+        }
+        seg.x = Math.max(1, Math.min(W_TILES - 2, seg.x + (Math.random() < 0.3 ? seg.dx : 0)));
+        seg.y += 1;
+      });
+
+      this.hangers.forEach(h => {
+        if (h.y >= 0 && h.y < this.H_TILES) {
+          drawHangingVine(ctx, h.x, h.y, h.len, h.colorIdx);
+        }
+      });
+
+      const allDone = this.segments.every(s => s.y > this.H_TILES);
+      if (allDone) {
+        setTimeout(() => {
+          ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+          this.init();
+        }, 1800);
+      }
+    }
+  }
+
+  const leftCanvas = setupCanvas('vineLeft');
+  const rightCanvas = setupCanvas('vineRight');
+
+  const leftVines = new VineSystem(leftCanvas, false);
+  const rightVines = new VineSystem(rightCanvas, true);
+
+  let lastTime = 0;
+  const TICK_MS = 120;
+
+  function loop(ts) {
+    if (ts - lastTime >= TICK_MS) {
+      lastTime = ts;
+      leftVines.tick();
+      rightVines.tick();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  requestAnimationFrame(loop);
+})();
+</script>
 
 <script type="module">
 import { parseMidi, writeMidi } from "https://cdn.jsdelivr.net/npm/midi-file@1.2.4/+esm";
