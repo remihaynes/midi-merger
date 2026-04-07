@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>MIDI Merger (Dark Theme)</title>
+<title>MIDI Merger</title>
 <style>
-  /* Dark background and light text */
+  /* Dark theme + monospace font */
   body {
     background-color: #121212;
     color: #e0e0e0;
@@ -22,16 +22,18 @@
     margin-bottom: 20px;
   }
 
+  /* Center file input and button */
   input[type="file"], 
-button {
-    display: block;       /* Makes margin auto work */
-    margin: 10px auto;    /* Horizontally centers and adds vertical spacing */
-    color: #e0e0e0;       /* keep text color for file input */
+  button {
+      display: block;
+      margin: 10px auto;
+      color: #e0e0e0; /* ensures text in file input is visible */
+      font-family: "Consolas", monospace;
   }
 
+  /* Button styling */
   button {
     background-color: #1f1f1f;
-    color: #ffffff;
     border: 1px solid #444;
     padding: 10px 20px;
     cursor: pointer;
@@ -40,24 +42,13 @@ button {
     transition: all 0.2s ease;
   }
 
-  button:hover {
-    background-color: #2a2a2a;
-    border-color: #666;
-  }
+  button:hover { background-color: #2a2a2a; border-color: #666; }
+  button:active { background-color: #333; }
 
-  button:active {
-    background-color: #333;
-  }
-
-  /* Small responsive tweak */
+  /* Responsive for small screens */
   @media (max-width: 500px) {
-    body {
-      padding: 20px;
-    }
-
-    button {
-      width: 100%;
-    }
+    body { padding: 20px; }
+    button { width: 100%; }
   }
 </style>
 </head>
