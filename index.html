@@ -2,155 +2,154 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>MIDI Merger (Full + Smart)</title>
+<title>MIDI Merger</title>
 </head>
 <body>
 
-<h3>MIDI Merger (Full Data + Smart Tracks)</h3>
+<h3>MIDI Merger (Working)</h3>
 <input type="file" id="files" multiple accept=".mid,.midi">
 <button onclick="mergeMidi()">Merge & Download</button>
 
-<script src="https://cdn.jsdelivr.net/npm/midi-file@1.2.4/dist/midi-file.min.js"></script>
+<script type="module">
+import { parseMidi, writeMidi } from "https://cdn.jsdelivr.net/npm/midi-file@1.2.4/+esm";
 
-<script>
-async function mergeMidi() {
-  const input = document.getElementById("files");
-  const files = input.files;
+window.mergeMidi = async function () {
+  try {
+    const input = document.getElementById("files");
+    const files = input.files;
 
-  if (!files.length) {
-    alert("Select MIDI files.");
-    return;
-  }
+    if (!files.length) {
+      alert("Select MIDI files.");
+      return;
+    }
 
-  const parsedFiles = [];
-  const fileNames = [];
+    const parsedFiles = [];
+    const fileNames = [];
 
-  for (let file of files) {
-    const buffer = await file.arrayBuffer();
-    const midi = MidiFile.parseMidi(new Uint8Array(buffer));
-    parsedFiles.push(midi);
-    fileNames.push(file.name.replace(".mid", ""));
-  }
+    for (let file of files) {
+      const buffer = await file.arrayBuffer();
+      const midi = parseMidi(new Uint8Array(buffer));
+      parsedFiles.push(midi);
+      fileNames.push(file.name.replace(".mid", ""));
+    }
 
-  const header = {
-    format: 1,
-    numTracks: 0,
-    ticksPerBeat: parsedFiles[0].header.ticksPerBeat
-  };
+    const header = {
+      format: 1,
+      numTracks: 0,
+      ticksPerBeat: parsedFiles[0].header.ticksPerBeat
+    };
 
-  const outputTracks = [];
-  const globalTrack = [];
+    const outputTracks = [];
+    const globalTrack = [];
 
-  let channelCounter = 0;
+    let channelCounter = 0;
 
-  parsedFiles.forEach((midi, fileIndex) => {
+    parsedFiles.forEach((midi, fileIndex) => {
 
-    midi.tracks.forEach((track, tIndex) => {
+      midi.tracks.forEach((track, tIndex) => {
 
-      let absoluteTime = 0;
-      const newTrack = [];
+        let absoluteTime = 0;
+        const newTrack = [];
+        let trackName = null;
 
-      let trackName = null;
+        track.forEach(event => {
+          absoluteTime += event.deltaTime;
 
-      track.forEach(event => {
-        absoluteTime += event.deltaTime;
+          const newEvent = structuredClone(event);
+          newEvent.absoluteTime = absoluteTime;
 
-        const newEvent = JSON.parse(JSON.stringify(event));
-        newEvent.absoluteTime = absoluteTime;
-
-        // Capture track name
-        if (event.meta && event.type === "trackName") {
-          trackName = event.text;
-        }
-
-        // Handle global events
-        if (event.meta) {
-          if (
-            event.type === "setTempo" ||
-            event.type === "timeSignature" ||
-            event.type === "keySignature"
-          ) {
-            if (fileIndex === 0 && tIndex === 0) {
-              globalTrack.push(newEvent);
-            }
-            return;
+          if (event.meta && event.type === "trackName") {
+            trackName = event.text;
           }
+
+          // Global events
+          if (event.meta) {
+            if (
+              event.type === "setTempo" ||
+              event.type === "timeSignature" ||
+              event.type === "keySignature"
+            ) {
+              if (fileIndex === 0 && tIndex === 0) {
+                globalTrack.push(newEvent);
+              }
+              return;
+            }
+          }
+
+          newTrack.push(newEvent);
+        });
+
+        if (!trackName) {
+          trackName = fileNames[fileIndex] + "_Track_" + (tIndex + 1);
         }
 
-        newTrack.push(newEvent);
+        const assignedChannel = channelCounter % 16;
+        channelCounter++;
+
+        newTrack.forEach(event => {
+          if (event.channel !== undefined) {
+            event.channel = assignedChannel;
+          }
+        });
+
+        newTrack.unshift({
+          deltaTime: 0,
+          meta: true,
+          type: "trackName",
+          text: trackName
+        });
+
+        newTrack.sort((a, b) => a.absoluteTime - b.absoluteTime);
+
+        let lastTime = 0;
+        newTrack.forEach(e => {
+          e.deltaTime = e.absoluteTime - lastTime;
+          delete e.absoluteTime;
+          lastTime += e.deltaTime;
+        });
+
+        newTrack.push({ deltaTime: 0, meta: true, type: "endOfTrack" });
+
+        outputTracks.push(newTrack);
       });
-
-      // Assign track name if missing
-      if (!trackName) {
-        trackName = fileNames[fileIndex] + "_Track_" + (tIndex + 1);
-      }
-
-      // Assign MIDI channel (avoid collisions)
-      const assignedChannel = channelCounter % 16;
-      channelCounter++;
-
-      newTrack.forEach(event => {
-        if (event.channel !== undefined) {
-          event.channel = assignedChannel;
-        }
-      });
-
-      // Insert track name at beginning
-      newTrack.unshift({
-        deltaTime: 0,
-        meta: true,
-        type: "trackName",
-        text: trackName
-      });
-
-      // Sort + rebuild deltaTime
-      newTrack.sort((a, b) => a.absoluteTime - b.absoluteTime);
-
-      let lastTime = 0;
-      newTrack.forEach(e => {
-        e.deltaTime = e.absoluteTime - lastTime;
-        delete e.absoluteTime;
-        lastTime += e.deltaTime;
-      });
-
-      newTrack.push({ deltaTime: 0, meta: true, type: "endOfTrack" });
-
-      outputTracks.push(newTrack);
     });
-  });
 
-  // Process global track
-  globalTrack.sort((a, b) => a.absoluteTime - b.absoluteTime);
+    globalTrack.sort((a, b) => a.absoluteTime - b.absoluteTime);
 
-  let lastTime = 0;
-  globalTrack.forEach(e => {
-    e.deltaTime = e.absoluteTime - lastTime;
-    delete e.absoluteTime;
-    lastTime += e.deltaTime;
-  });
+    let lastTime = 0;
+    globalTrack.forEach(e => {
+      e.deltaTime = e.absoluteTime - lastTime;
+      delete e.absoluteTime;
+      lastTime += e.deltaTime;
+    });
 
-  globalTrack.unshift({
-    deltaTime: 0,
-    meta: true,
-    type: "trackName",
-    text: "Global"
-  });
+    globalTrack.unshift({
+      deltaTime: 0,
+      meta: true,
+      type: "trackName",
+      text: "Global"
+    });
 
-  globalTrack.push({ deltaTime: 0, meta: true, type: "endOfTrack" });
+    globalTrack.push({ deltaTime: 0, meta: true, type: "endOfTrack" });
 
-  const finalMidi = {
-    header: header,
-    tracks: [globalTrack, ...outputTracks]
-  };
+    const finalMidi = {
+      header: header,
+      tracks: [globalTrack, ...outputTracks]
+    };
 
-  const bytes = MidiFile.writeMidi(finalMidi);
-  const blob = new Blob([new Uint8Array(bytes)], { type: "audio/midi" });
+    const bytes = writeMidi(finalMidi);
+    const blob = new Blob([new Uint8Array(bytes)], { type: "audio/midi" });
 
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "merged.mid";
-  a.click();
-}
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "merged.mid";
+    a.click();
+
+  } catch (err) {
+    console.error(err);
+    alert("Error occurred. Open console (F12).");
+  }
+};
 </script>
 
 </body>
