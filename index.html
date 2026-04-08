@@ -13,10 +13,9 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: center;
     height: 100vh;
     margin: 0;
-    padding-top: 80px;
     overflow: hidden;
     position: relative;
   }
@@ -26,8 +25,9 @@
     position: absolute;
     inset: 0;
     background-image: url("https://www.transparenttextures.com/patterns/asfalt-dark.png");
-    opacity: 0.25;
+    opacity: 0.22;
     pointer-events: none;
+    z-index: 0;
   }
 
   #vineCanvas {
@@ -40,51 +40,92 @@
 
   h3 {
     color: #f2e6d0;
-    margin-bottom: 30px;
+    margin-bottom: 28px;
     z-index: 2;
     position: relative;
+    font-size: 18px;
+    letter-spacing: 0.06em;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.7);
   }
 
   .center-column {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 20px;
+    gap: 18px;
     z-index: 2;
     position: relative;
+  }
+
+  /* --- bark wrapper drawn with SVG border-image --- */
+  .bark-wrap {
+    position: relative;
+    padding: 3px;
+    border-radius: 7px;
+    /* SVG bark border: irregular dark ridges on a warm brown band */
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
+
+  .bark-wrap::before {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border-radius: 9px;
+    background:
+      repeating-linear-gradient(
+        92deg,
+        #5a3820 0px,  #3d2210 2px,
+        #6b4528 4px,  #4a2c14 6px,
+        #7a5030 9px,  #3d2210 11px,
+        #5a3820 14px, #614028 17px,
+        #3d2210 19px, #6b4528 22px,
+        #4a2c14 25px, #5a3820 28px
+      ),
+      repeating-linear-gradient(
+        88deg,
+        transparent 0px,
+        rgba(0,0,0,0.18) 1px,
+        transparent 3px,
+        rgba(120,70,20,0.12) 5px,
+        transparent 8px
+      );
+    background-blend-mode: multiply;
+    z-index: -1;
+  }
+
+  /* subtle knot-like notches using pseudo-shadow */
+  .bark-wrap::after {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border-radius: 9px;
+    box-shadow:
+      inset 0 0 0 1px rgba(20,10,5,0.5),
+      inset 0 1px 0 rgba(180,120,60,0.15),
+      inset 0 -1px 0 rgba(0,0,0,0.4);
+    z-index: -1;
   }
 
   input, button {
     font-family: "Consolas", monospace;
-    background: #3a2a1f;
+    background: #2e1e12;
     color: #e6d3b3;
-    border: 1px solid #5a3e2b;
-    padding: 10px 20px;
-    border-radius: 6px;
+    border: none;
+    padding: 10px 22px;
+    border-radius: 5px;
     font-size: 15px;
+    display: block;
+    width: 100%;
   }
 
-  button { cursor: pointer; transition: 0.2s; }
-  button:hover { background: #4a3426; }
-
-  .piano {
-    margin-top: 60px;
-    z-index: 2;
-    position: relative;
-    animation: float 4s ease-in-out infinite;
+  button {
+    cursor: pointer;
+    transition: background 0.2s;
+    background: #3a2416;
+    color: #d4c49a;
   }
-
-  .piano img {
-    width: 200px;
-    image-rendering: pixelated;
-    mix-blend-mode: multiply;
-    filter: drop-shadow(0 0 12px rgba(60,255,136,0.4));
-  }
-
-  @keyframes float {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-10px); }
-  }
+  button:hover { background: #4d3020; }
 </style>
 </head>
 <body>
@@ -93,25 +134,26 @@
 
 <h3>MIDI Merger</h3>
 <div class="center-column">
-  <input type="file" id="files" multiple accept=".mid,.midi">
-  <button onclick="mergeMidi()">Merge & Download</button>
-</div>
-<div class="piano">
-  <img src="piano.gif" alt="pixel piano">
+  <div class="bark-wrap">
+    <input type="file" id="files" multiple accept=".mid,.midi">
+  </div>
+  <div class="bark-wrap">
+    <button onclick="mergeMidi()">Merge & Download</button>
+  </div>
 </div>
 
 <script>
 (function () {
   const PX = 6;
-  const BG = '#1b140f';
+  const BG     = '#1b140f';
   const STEMS  = ['#2d7a1f','#3a9926','#1f5c12','#4ab830','#266b18'];
   const LEAVES = ['#3cba28','#4fd63a','#28a01a','#5ee048','#34c424'];
   const SHADOW = '#1a4a0e';
   const HANGS  = ['#4fd63a','#3cba28','#28a01a','#5ee048'];
 
-  // How far inward vines can reach from their home edge (fraction of screen dimension)
-  const MAX_REACH_H = 0.16; // left/right: fraction of width
-  const MAX_REACH_V = 0.18; // top/bottom: fraction of height
+  // max inward reach as fraction of screen dimension
+  const REACH_H = 0.26;
+  const REACH_V = 0.26;
 
   const canvas = document.getElementById('vineCanvas');
   const ctx = canvas.getContext('2d');
@@ -126,30 +168,29 @@
   resize();
   window.addEventListener('resize', () => { resize(); initAll(); });
 
-  // edge: 'L','R','T','B'
   function tooFar(tx, ty, edge) {
-    if (edge === 'L') return tx > WT * MAX_REACH_H;
-    if (edge === 'R') return tx < WT * (1 - MAX_REACH_H);
-    if (edge === 'T') return ty > HT * MAX_REACH_V;
-    if (edge === 'B') return ty < HT * (1 - MAX_REACH_V);
+    if (edge === 'L') return tx > WT * REACH_H;
+    if (edge === 'R') return tx < WT * (1 - REACH_H);
+    if (edge === 'T') return ty > HT * REACH_V;
+    if (edge === 'B') return ty < HT * (1 - REACH_V);
     return false;
   }
 
   function dp(tx, ty, color) {
     if (tx < 0 || ty < 0 || tx >= WT || ty >= HT) return false;
     ctx.fillStyle = color;
-    ctx.fillRect(tx*PX, ty*PX, PX, PX);
+    ctx.fillRect(tx * PX, ty * PX, PX, PX);
     return true;
   }
 
   function drawLeaf(tx, ty, dir, ci) {
     const b = LEAVES[ci % LEAVES.length];
     if (dir === 'r') {
-      dp(tx,   ty,   b); dp(tx+1, ty,   b);
-      dp(tx+1, ty+1, b); dp(tx,   ty+1, SHADOW); dp(tx+2, ty, SHADOW);
+      dp(tx, ty, b); dp(tx+1, ty, b); dp(tx+1, ty+1, b);
+      dp(tx, ty+1, SHADOW); dp(tx+2, ty, SHADOW);
     } else {
-      dp(tx,   ty,   b); dp(tx-1, ty,   b);
-      dp(tx-1, ty+1, b); dp(tx,   ty+1, SHADOW); dp(tx-2, ty, SHADOW);
+      dp(tx, ty, b); dp(tx-1, ty, b); dp(tx-1, ty+1, b);
+      dp(tx, ty+1, SHADOW); dp(tx-2, ty, SHADOW);
     }
   }
 
@@ -158,22 +199,20 @@
       const c = HANGS[(ci+i) % HANGS.length];
       const j = i % 2 === 0 ? 0 : (Math.random() > .5 ? 1 : 0);
       dp(tx+j, ty+i, c);
-      if (i === len-1) dp(tx+j, ty+i+1, SHADOW);
+      if (i === len - 1) dp(tx+j, ty+i+1, SHADOW);
     }
   }
 
-  // ---------- Seg ----------
   class Seg {
     constructor(x, y, dx, dy, ci, edge, delay) {
       this.x = x; this.y = y;
       this.dx = dx; this.dy = dy;
-      this.ci = ci;
-      this.edge = edge;
+      this.ci = ci; this.edge = edge;
       this.leafTimer = 0; this.leafSide = Math.random() > .5 ? 'r' : 'l';
       this.hangTimer = 0;
       this.alive = true;
       this.age = -(delay || 0);
-      this.maxAge = 35 + Math.floor(Math.random() * 25);
+      this.maxAge = 60 + Math.floor(Math.random() * 45);
     }
 
     tick() {
@@ -188,82 +227,91 @@
       dp(tx, ty, STEMS[this.ci % STEMS.length]);
 
       this.leafTimer++;
-      if (this.leafTimer >= 3 + Math.floor(Math.random()*3)) {
+      if (this.leafTimer >= 3 + Math.floor(Math.random() * 3)) {
         this.leafTimer = 0;
         drawLeaf(tx, ty, this.leafSide, this.ci);
         this.leafSide = this.leafSide === 'r' ? 'l' : 'r';
-        this.ci = (this.ci+1) % LEAVES.length;
+        this.ci = (this.ci + 1) % LEAVES.length;
       }
 
       this.hangTimer++;
-      if (this.hangTimer >= 6 + Math.floor(Math.random()*6)) {
+      if (this.hangTimer >= 6 + Math.floor(Math.random() * 6)) {
         this.hangTimer = 0;
-        const hx = tx + (this.dy !== 0 ? (Math.random()>.5?1:-1) : 0);
-        const hy = ty + (this.dx !== 0 ? (Math.random()>.5?1:-1) : 0);
-        drawHang(hx, hy, 2 + Math.floor(Math.random()*3), this.ci);
+        const hx = tx + (this.dy !== 0 ? (Math.random() > .5 ? 1 : -1) : 0);
+        const hy = ty + (this.dx !== 0 ? (Math.random() > .5 ? 1 : -1) : 0);
+        drawHang(hx, hy, 2 + Math.floor(Math.random() * 4), this.ci);
       }
 
-      if (Math.random() < 0.16) {
-        this.dx += (Math.random()>.5 ? 0.1 : -0.1);
-        this.dx = Math.max(-0.5, Math.min(0.5, this.dx));
+      // wander more freely — more horizontal drift so vines sprawl along the edge
+      if (Math.random() < 0.22) {
+        this.dx += (Math.random() > .5 ? 0.13 : -0.13);
+        // clamp based on edge orientation so they still generally travel along/away from edge
+        if (this.edge === 'L' || this.edge === 'R') {
+          this.dx = Math.max(-0.35, Math.min(0.35, this.dx));
+        } else {
+          this.dx = Math.max(-0.55, Math.min(0.55, this.dx));
+          this.dy += (Math.random() > .7 ? 0.05 : -0.05);
+          this.dy = Math.max(0.3, Math.min(1.1, Math.abs(this.dy))) * Math.sign(this.dy || 1);
+        }
       }
 
-      this.x += this.dx * (0.5 + Math.random()*0.5);
-      this.y += this.dy * (0.7 + Math.random()*0.4);
+      this.x += this.dx * (0.5 + Math.random() * 0.6);
+      this.y += this.dy * (0.6 + Math.random() * 0.5);
       this.age++;
     }
   }
 
   let segs = [];
   let fadeTimer = 0;
-  const FADE_EVERY = 10;
-  const FADE_ALPHA = 0.07;
+  const FADE_EVERY = 15;
+  const FADE_ALPHA = 0.042;
 
   function fade() {
     ctx.fillStyle = BG;
     ctx.globalAlpha = FADE_ALPHA;
     ctx.fillRect(0, 0, W, H);
-    ctx.globalAlpha = 1.0;
+    ctx.globalAlpha = 1;
   }
 
   function initAll() {
     segs = [];
     ctx.clearRect(0, 0, W, H);
 
-    // 3 left, 3 right, 2 top, 2 bottom — staggered so they don't all appear at once
-    const roots = [
-      // left wall
-      ['L', 0,      HT*0.15, 0.12,  0.9,  0],
-      ['L', 0,      HT*0.50, 0.10,  1.0, 20],
-      ['L', 0,      HT*0.80, 0.14,  0.8, 10],
-      // right wall
-      ['R', WT-1,   HT*0.25, -0.12, 0.9,  5],
-      ['R', WT-1,   HT*0.60, -0.10, 1.0, 25],
-      ['R', WT-1,   HT*0.88, -0.14, 0.7, 15],
-      // top edge
-      ['T', WT*0.1, 0,        0.3,  0.8,  8],
-      ['T', WT*0.9, 0,       -0.3,  0.8, 18],
-      // bottom edge
-      ['B', WT*0.08, HT-1,    0.2, -0.8, 12],
-      ['B', WT*0.92, HT-1,   -0.2, -0.8, 22],
-    ];
+    // Roots spread along the full length of each edge, NOT clustered at corners.
+    // Left wall: evenly spaced vertically
+    const left = [0.10, 0.28, 0.46, 0.64, 0.82].map((f, i) =>
+      ['L', 0, HT * f, 0.08 + Math.random()*0.08, 0.75 + Math.random()*0.3, i * 9]);
 
-    roots.forEach(([edge, x, y, dx, dy, delay], i) => {
+    // Right wall: offset from left so they don't mirror exactly
+    const right = [0.18, 0.36, 0.54, 0.72, 0.90].map((f, i) =>
+      ['R', WT-1, HT * f, -(0.08 + Math.random()*0.08), 0.75 + Math.random()*0.3, i * 7 + 4]);
+
+    // Top edge: spread across width, aimed downward with horizontal drift
+    const top = [0.15, 0.38, 0.62, 0.85].map((f, i) =>
+      ['T', WT * f, 0, (Math.random() - 0.5) * 0.5, 0.8 + Math.random()*0.25, i * 11 + 6]);
+
+    // Bottom edge: spread across width, aimed upward
+    const bot = [0.08, 0.32, 0.68, 0.92].map((f, i) =>
+      ['B', WT * f, HT-1, (Math.random() - 0.5) * 0.5, -(0.8 + Math.random()*0.25), i * 13 + 3]);
+
+    [...left, ...right, ...top, ...bot].forEach(([edge, x, y, dx, dy, delay], i) => {
       segs.push(new Seg(x, y, dx, dy, i % STEMS.length, edge, delay));
     });
   }
 
   let reseedTimer = 0;
-  function maybeSeed() {
+  function maybySeed() {
     reseedTimer++;
-    if (reseedTimer < 80) return;
+    if (reseedTimer < 38) return;
     reseedTimer = 0;
     const pick = Math.floor(Math.random() * 4);
     let x, y, dx, dy, edge;
-    if (pick === 0) { edge='L'; x=0;    y=Math.floor(Math.random()*HT); dx=0.1+Math.random()*0.1; dy=0.7+Math.random()*0.4; }
-    if (pick === 1) { edge='R'; x=WT-1; y=Math.floor(Math.random()*HT); dx=-(0.1+Math.random()*0.1); dy=0.7+Math.random()*0.4; }
-    if (pick === 2) { edge='T'; x=Math.floor(Math.random()*WT); y=0;    dx=(Math.random()-.5)*0.4; dy=0.8+Math.random()*0.3; }
-    if (pick === 3) { edge='B'; x=Math.floor(Math.random()*WT); y=HT-1; dx=(Math.random()-.5)*0.4; dy=-(0.8+Math.random()*0.3); }
+    // Seed at a random position along the chosen edge (not just corners)
+    const t = Math.random();
+    if (pick === 0) { edge='L'; x=0;    y=Math.floor(t*HT);  dx= 0.08+Math.random()*0.1; dy=(Math.random()-.2)*0.8+0.5; }
+    if (pick === 1) { edge='R'; x=WT-1; y=Math.floor(t*HT);  dx=-(0.08+Math.random()*0.1); dy=(Math.random()-.2)*0.8+0.5; }
+    if (pick === 2) { edge='T'; x=Math.floor(t*WT); y=0;    dx=(Math.random()-.5)*0.5; dy= 0.8+Math.random()*0.3; }
+    if (pick === 3) { edge='B'; x=Math.floor(t*WT); y=HT-1; dx=(Math.random()-.5)*0.5; dy=-(0.8+Math.random()*0.3); }
     segs.push(new Seg(x, y, dx, dy, Math.floor(Math.random()*STEMS.length), edge, 0));
   }
 
@@ -275,20 +323,12 @@
   function loop(ts) {
     if (ts - last >= TICK) {
       last = ts;
-
       fadeTimer++;
-      if (fadeTimer >= FADE_EVERY) {
-        fadeTimer = 0;
-        fade();
-      }
-
+      if (fadeTimer >= FADE_EVERY) { fadeTimer = 0; fade(); }
       segs.forEach(s => s.tick());
       segs = segs.filter(s => s.alive);
-
-      maybeSeed();
-
-      // hard cap on segment count to prevent runaway branching
-      if (segs.length > 20) segs = segs.slice(segs.length - 20);
+      maybySeed();
+      if (segs.length > 30) segs = segs.slice(segs.length - 30);
     }
     requestAnimationFrame(loop);
   }
@@ -317,51 +357,54 @@ window.mergeMidi = async function () {
     let channel = 0;
 
     function rebuild(track) {
-      track.sort((a,b)=>a.time-b.time);
+      track.sort((a,b) => a.time - b.time);
       let last = 0;
-      return track.map(e=>{ const d=e.time-last; last=e.time; delete e.time; return {...e,deltaTime:d}; });
+      return track.map(e => { const d=e.time-last; last=e.time; delete e.time; return {...e, deltaTime:d}; });
     }
 
-    parsed.forEach((midi, fi)=>{
-      midi.tracks.forEach((track, ti)=>{
+    parsed.forEach((midi, fi) => {
+      midi.tracks.forEach((track, ti) => {
         let time=0, newTrack=[], name=null;
-        track.forEach(ev=>{
+        track.forEach(ev => {
           time += ev.deltaTime;
           const e = structuredClone(ev);
           if (e.meta && e.type==="trackName") name=e.text;
           if (e.meta && (e.type==="setTempo"||e.type==="timeSignature"||e.type==="keySignature")) {
-            if (fi===0&&ti===0) globalTrack.push({...e,time});
+            if (fi===0 && ti===0) globalTrack.push({...e, time});
             return;
           }
-          if (e.channel!==undefined) e.channel=channel%16;
-          newTrack.push({...e,time});
+          if (e.channel !== undefined) e.channel = channel % 16;
+          newTrack.push({...e, time});
         });
-        if (!name) name=names[fi]+"_Track_"+(ti+1);
-        newTrack.push({time:0,meta:true,type:"trackName",text:name});
-        newTrack=rebuild(newTrack);
-        newTrack.totalTime=newTrack.reduce((s,e)=>s+e.deltaTime,0);
+        if (!name) name = names[fi] + "_Track_" + (ti+1);
+        newTrack.push({time:0, meta:true, type:"trackName", text:name});
+        newTrack = rebuild(newTrack);
+        newTrack.totalTime = newTrack.reduce((s,e) => s+e.deltaTime, 0);
         outputTracks.push(newTrack);
         channel++;
       });
     });
 
-    let maxTime=0;
-    outputTracks.forEach(t=>{if(t.totalTime>maxTime)maxTime=t.totalTime;});
-    outputTracks.forEach(track=>{
-      const cur=track.reduce((s,e)=>s+e.deltaTime,0);
-      track.push({deltaTime:Math.max(0,maxTime-cur),meta:true,type:"endOfTrack"});
+    let maxTime = 0;
+    outputTracks.forEach(t => { if (t.totalTime > maxTime) maxTime = t.totalTime; });
+    outputTracks.forEach(track => {
+      const cur = track.reduce((s,e) => s+e.deltaTime, 0);
+      track.push({deltaTime: Math.max(0, maxTime-cur), meta:true, type:"endOfTrack"});
     });
 
-    const fg=rebuild(globalTrack);
-    fg.unshift({deltaTime:0,meta:true,type:"trackName",text:"Global"});
-    fg.push({deltaTime:maxTime,meta:true,type:"endOfTrack"});
+    const fg = rebuild(globalTrack);
+    fg.unshift({deltaTime:0, meta:true, type:"trackName", text:"Global"});
+    fg.push({deltaTime:maxTime, meta:true, type:"endOfTrack"});
 
-    const finalMidi={header:{format:1,numTracks:outputTracks.length+1,ticksPerBeat},tracks:[fg,...outputTracks]};
-    const bytes=writeMidi(finalMidi);
-    const blob=new Blob([new Uint8Array(bytes)],{type:"audio/midi"});
-    const a=document.createElement("a");
-    a.href=URL.createObjectURL(blob);
-    a.download="merged.mid";
+    const finalMidi = {
+      header: {format:1, numTracks:outputTracks.length+1, ticksPerBeat},
+      tracks: [fg, ...outputTracks]
+    };
+    const bytes = writeMidi(finalMidi);
+    const blob = new Blob([new Uint8Array(bytes)], {type:"audio/midi"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "merged.mid";
     a.click();
   } catch(e) { console.error(e); alert("Error — check console (F12)"); }
 };
